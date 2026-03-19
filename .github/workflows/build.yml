@@ -1,5 +1,5 @@
-# =============================================================================
-# GitHub Actions — Build and Release Pipeline
+﻿# =============================================================================
+# GitHub Actions â€” Build and Release Pipeline
 # =============================================================================
 # Triggers:
 #   - Push to main (builds and uploads artifact)
@@ -104,3 +104,4 @@ jobs:
           - Administrator privileges (UAC prompt will appear automatically)
         draft: false
         prerelease: false
+
