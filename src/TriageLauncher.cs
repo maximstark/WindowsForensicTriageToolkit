@@ -1,0 +1,1276 @@
+// =============================================================================
+// TriageLauncher.cs -- Windows Forensic Triage Toolkit v1.5
+// =============================================================================
+// Two-screen WinForms application:
+//   Screen 1: Scan view with live terminal output and module progress
+//   Screen 2: Report viewer with collapsible findings, traffic light badges
+// Plus: scan history stored in %APPDATA%\TriageToolkit\scan_history.json
+//
+// Build: .\build.ps1 (uses csc.exe from .NET Framework)
+// =============================================================================
+
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Security.Principal;
+using System.Text;
+using System.Threading;
+using System.Windows.Forms;
+
+// Simple JSON handling without external dependencies
+using System.Text.RegularExpressions;
+
+namespace TriageToolkit
+{
+    // =========================================================================
+    // Color palette matching the HTML reports
+    // =========================================================================
+    static class Theme
+    {
+        public static readonly Color Bg        = Color.FromArgb(15, 17, 23);
+        public static readonly Color Surface   = Color.FromArgb(26, 29, 39);
+        public static readonly Color Border    = Color.FromArgb(42, 45, 58);
+        public static readonly Color Text      = Color.FromArgb(226, 232, 240);
+        public static readonly Color Muted     = Color.FromArgb(100, 116, 139);
+        public static readonly Color Red       = Color.FromArgb(239, 68, 68);
+        public static readonly Color RedBg     = Color.FromArgb(45, 10, 10);
+        public static readonly Color Yellow    = Color.FromArgb(234, 179, 8);
+        public static readonly Color YellowBg  = Color.FromArgb(28, 26, 5);
+        public static readonly Color Green     = Color.FromArgb(34, 197, 94);
+        public static readonly Color GreenBg   = Color.FromArgb(5, 46, 22);
+        public static readonly Color Blue      = Color.FromArgb(59, 130, 246);
+        public static readonly Color BlueBg    = Color.FromArgb(10, 22, 40);
+
+        public static readonly Font Header     = new Font("Segoe UI", 16f, FontStyle.Bold);
+        public static readonly Font SubHeader  = new Font("Segoe UI", 11f, FontStyle.Bold);
+        public static readonly Font Body       = new Font("Segoe UI", 9.5f);
+        public static readonly Font Mono       = new Font("Consolas", 9f);
+        public static readonly Font MonoSmall  = new Font("Consolas", 8.5f);
+        public static readonly Font Badge      = new Font("Segoe UI", 8f, FontStyle.Bold);
+
+        public static Color SeverityColor(string sev)
+        {
+            switch ((sev ?? "").ToUpper())
+            {
+                case "RED":    return Red;
+                case "YELLOW": return Yellow;
+                case "GREEN":  return Green;
+                default:       return Blue;
+            }
+        }
+        public static Color SeverityBg(string sev)
+        {
+            switch ((sev ?? "").ToUpper())
+            {
+                case "RED":    return RedBg;
+                case "YELLOW": return YellowBg;
+                case "GREEN":  return GreenBg;
+                default:       return BlueBg;
+            }
+        }
+    }
+
+    // =========================================================================
+    // Data model for parsed JSON findings
+    // =========================================================================
+    class Finding
+    {
+        public string Severity = "";
+        public string Title = "";
+        public string Detail = "";
+        public string WhyItMatters = "";
+        public string WhyMightBeNormal = "";
+    }
+
+    class ModuleResult
+    {
+        public string Module = "";
+        public string Title = "";
+        public string Hostname = "";
+        public string ScanTime = "";
+        public int Red, Yellow, Green, Info;
+        public List<Finding> Findings = new List<Finding>();
+    }
+
+    class ScanRecord
+    {
+        public string Timestamp = "";
+        public string Hostname = "";
+        public string ReportPath = "";
+        public int TotalRed, TotalYellow;
+        public int ModulesCompleted;
+    }
+
+    // =========================================================================
+    // Module definitions
+    // =========================================================================
+    static class Modules
+    {
+        public static readonly string[] Files = {
+            "01_SystemIdentity.ps1",
+            "02_StorageAndFiles.ps1",
+            "03_SecurityConfig.ps1",
+            "04_AccountsAndAuth.ps1",
+            "05_ProcessesAndSoftware.ps1",
+            "06_Persistence.ps1",
+            "07_NetworkSnapshot.ps1",
+            "08_NetworkTimeSeries.ps1",
+            "09_ForensicArtifacts.ps1",
+            "10_Correlation.ps1"
+        };
+        public static readonly string[] Names = {
+            "System Identity",
+            "Storage & Files",
+            "Security Configuration",
+            "Accounts & Authentication",
+            "Processes & Software",
+            "Persistence Mechanisms",
+            "Network Snapshot",
+            "Network Time Series",
+            "Forensic Artifacts",
+            "Cross-Module Correlation"
+        };
+    }
+
+    // =========================================================================
+    // Entry point
+    // =========================================================================
+    static class Program
+    {
+        [STAThread]
+        static void Main(string[] args)
+        {
+            if (!IsAdministrator())
+            {
+                try
+                {
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = Assembly.GetExecutingAssembly().Location,
+                        UseShellExecute = true,
+                        Verb = "runas"
+                    };
+                    Process.Start(psi);
+                    return;
+                }
+                catch
+                {
+                    MessageBox.Show(
+                        "This tool requires Administrator privileges for a complete scan.\n\n" +
+                        "Please right-click and select 'Run as administrator'.",
+                        "Windows Forensic Triage Toolkit",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+            }
+
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            Application.Run(new MainForm());
+        }
+
+        static bool IsAdministrator()
+        {
+            var identity = WindowsIdentity.GetCurrent();
+            var principal = new WindowsPrincipal(identity);
+            return principal.IsInRole(WindowsBuiltInRole.Administrator);
+        }
+    }
+
+    // =========================================================================
+    // Main form -- contains both scan and report views
+    // =========================================================================
+    class MainForm : Form
+    {
+        // Panels for the two screens
+        private Panel scanPanel;
+        private Panel reportPanel;
+        private Panel exportPanel;
+
+        // Scan screen controls
+        private Label titleLabel;
+        private Label statusLabel;
+        private Label moduleLabel;
+        private ProgressBar progressBar;
+        private RichTextBox logBox;
+        private Button startButton;
+        private Button cancelButton;
+        private Panel historyPanel;
+        private ListView historyList;
+
+        // Report screen controls
+        private Panel reportHeader;
+        private Panel reportBody;
+        private Button backButton;
+        private Button exportButton;
+
+        // Export screen controls
+        private RichTextBox exportTextBox;
+
+        // State
+        private string tempBase;
+        private string reportsDir;
+        private string savedReportsDir; // Logs\ folder path — persists after temp cleanup
+        private string savedLogsDir;    // Same as savedReportsDir — used by export screen
+        private Thread workerThread;
+        private bool cancelled;
+        private bool hasResults; // true after a scan completes successfully
+        private List<ModuleResult> scanResults = new List<ModuleResult>();
+
+        public MainForm()
+        {
+            this.Text = "Windows Forensic Triage Toolkit v1.5";
+            this.Size = new Size(900, 660);
+            this.StartPosition = FormStartPosition.CenterScreen;
+            this.BackColor = Theme.Bg;
+            this.ForeColor = Theme.Text;
+            this.Font = Theme.Body;
+            this.MinimumSize = new Size(750, 500);
+
+            BuildScanScreen();
+            BuildReportScreen();
+            BuildExportScreen();
+
+            // Add panels back to front: scan is topmost by default
+            this.Controls.Add(exportPanel);
+            this.Controls.Add(reportPanel);
+            this.Controls.Add(scanPanel);
+
+            // Show scan screen, hide others
+            exportPanel.Visible = false;
+            reportPanel.Visible = false;
+            scanPanel.Visible = true;
+            scanPanel.BringToFront();
+            LoadHistory();
+        }
+
+        // =================================================================
+        // SCAN SCREEN
+        // =================================================================
+        void BuildScanScreen()
+        {
+            scanPanel = new Panel { Dock = DockStyle.Fill };
+
+            titleLabel = new Label
+            {
+                Text = "WINDOWS FORENSIC TRIAGE TOOLKIT",
+                Font = Theme.Header,
+                ForeColor = Theme.Text,
+                Location = new Point(20, 15),
+                AutoSize = true
+            };
+
+            var versionLabel = new Label
+            {
+                Text = "v1.5  |  Read-only forensic assessment  |  No system changes",
+                Font = Theme.Body,
+                ForeColor = Theme.Muted,
+                Location = new Point(22, 48),
+                AutoSize = true
+            };
+
+            statusLabel = new Label
+            {
+                Text = "Ready to scan",
+                ForeColor = Theme.Blue,
+                Location = new Point(20, 80),
+                Size = new Size(600, 22)
+            };
+
+            moduleLabel = new Label
+            {
+                Text = "",
+                Font = Theme.Mono,
+                ForeColor = Theme.Blue,
+                Location = new Point(20, 102),
+                Size = new Size(600, 22)
+            };
+
+            progressBar = new ProgressBar
+            {
+                Minimum = 0, Maximum = 11, Value = 0,
+                Location = new Point(20, 130),
+                Size = new Size(845, 14)
+            };
+
+            startButton = new Button
+            {
+                Text = "Start Scan",
+                Size = new Size(130, 36),
+                Location = new Point(20, 152),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Theme.Blue,
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI", 10f, FontStyle.Bold)
+            };
+            startButton.FlatAppearance.BorderSize = 0;
+            startButton.Click += (s, e) =>
+            {
+                if (hasResults)
+                    ShowReportScreen();
+                else
+                    StartScan();
+            };
+
+            cancelButton = new Button
+            {
+                Text = "Cancel",
+                Size = new Size(100, 36),
+                Location = new Point(160, 152),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Theme.Surface,
+                ForeColor = Theme.Muted,
+                Enabled = false
+            };
+            cancelButton.FlatAppearance.BorderColor = Theme.Border;
+            cancelButton.Click += (s, e) =>
+            {
+                cancelled = true;
+                cancelButton.Enabled = false;
+                hasResults = false;
+                startButton.Text = "Start Scan";
+            };
+
+            // Scan history label in the button row
+            var histLabel = new Label
+            {
+                Text = "SCAN HISTORY",
+                Font = Theme.Badge,
+                ForeColor = Theme.Muted,
+                Location = new Point(290, 163),
+                AutoSize = true
+            };
+
+            logBox = new RichTextBox
+            {
+                Location = new Point(20, 198),
+                Size = new Size(845, 310),
+                BackColor = Theme.Surface,
+                ForeColor = Theme.Muted,
+                Font = Theme.MonoSmall,
+                ReadOnly = true,
+                BorderStyle = BorderStyle.None,
+                ScrollBars = RichTextBoxScrollBars.Vertical
+            };
+
+            historyList = new ListView
+            {
+                Location = new Point(20, 518),
+                Size = new Size(845, 80),
+                View = View.Details,
+                FullRowSelect = true,
+                BackColor = Theme.Surface,
+                ForeColor = Theme.Text,
+                Font = Theme.MonoSmall,
+                BorderStyle = BorderStyle.None,
+                HeaderStyle = ColumnHeaderStyle.Nonclickable,
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left
+            };
+            historyList.Columns.Add("Date", 150);
+            historyList.Columns.Add("Host", 150);
+            historyList.Columns.Add("Red", 60);
+            historyList.Columns.Add("Yellow", 60);
+            historyList.Columns.Add("Modules", 70);
+            historyList.Columns.Add("Report Path", 340);
+
+            scanPanel.Controls.AddRange(new Control[] {
+                titleLabel, versionLabel, statusLabel, moduleLabel,
+                progressBar, logBox, startButton, cancelButton,
+                histLabel, historyList
+            });
+
+            // Resize handler: set widths and heights relative to actual client size
+            scanPanel.Resize += (s, e) =>
+            {
+                int w = scanPanel.ClientSize.Width - 40; // 20px margin each side
+                int h = scanPanel.ClientSize.Height;
+                progressBar.Size = new Size(w, 14);
+                logBox.Location = new Point(20, 198);
+                logBox.Size = new Size(w, h - 198 - 100); // leave 100px for history at bottom
+                historyList.Location = new Point(20, h - 90);
+                historyList.Size = new Size(w, 80);
+            };
+        }
+
+        // =================================================================
+        // REPORT SCREEN
+        // =================================================================
+        void BuildReportScreen()
+        {
+            reportPanel = new Panel { Dock = DockStyle.Fill };
+
+            reportHeader = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 65,
+                BackColor = Theme.Surface,
+                Padding = new Padding(20, 12, 20, 12)
+            };
+
+            backButton = new Button
+            {
+                Text = "< Back",
+                Size = new Size(80, 32),
+                Location = new Point(20, 16),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Theme.Surface,
+                ForeColor = Theme.Blue
+            };
+            backButton.FlatAppearance.BorderColor = Theme.Border;
+            backButton.Click += (s, e) => ShowScanScreen();
+
+            exportButton = new Button
+            {
+                Text = "Open HTML Reports",
+                Size = new Size(150, 32),
+                Location = new Point(110, 16),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Theme.Surface,
+                ForeColor = Theme.Green
+            };
+            exportButton.FlatAppearance.BorderColor = Theme.Border;
+            exportButton.Click += (s, e) => OpenHtmlReports();
+
+            var newScanButton = new Button
+            {
+                Text = "New Scan",
+                Size = new Size(100, 32),
+                Location = new Point(270, 16),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Theme.Surface,
+                ForeColor = Theme.Yellow
+            };
+            newScanButton.FlatAppearance.BorderColor = Theme.Border;
+            newScanButton.Click += (s, e) =>
+            {
+                hasResults = false;
+                ShowScanScreen();
+            };
+
+            var shareButton = new Button
+            {
+                Text = "Export & Share",
+                Size = new Size(130, 32),
+                Location = new Point(380, 16),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Theme.Surface,
+                ForeColor = Theme.Blue
+            };
+            shareButton.FlatAppearance.BorderColor = Theme.Border;
+            shareButton.Click += (s, e) => ShowExportScreen();
+
+            var reportTitle = new Label
+            {
+                Text = "SCAN RESULTS",
+                Font = Theme.SubHeader,
+                ForeColor = Theme.Text,
+                Location = new Point(530, 22),
+                AutoSize = true
+            };
+
+            reportHeader.Controls.AddRange(new Control[] { backButton, exportButton, newScanButton, shareButton, reportTitle });
+
+            reportBody = new Panel
+            {
+                Dock = DockStyle.Fill,
+                AutoScroll = true,
+                BackColor = Theme.Bg,
+                Padding = new Padding(20, 10, 20, 10)
+            };
+
+            reportPanel.Controls.Add(reportBody);
+            reportPanel.Controls.Add(reportHeader);
+        }
+
+        void BuildExportScreen()
+        {
+            exportPanel = new Panel { Dock = DockStyle.Fill };
+
+            var exportHeader = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 65,
+                BackColor = Theme.Surface,
+                Padding = new Padding(20, 12, 20, 12)
+            };
+
+            var exportBackButton = new Button
+            {
+                Text = "< Back",
+                Size = new Size(80, 32),
+                Location = new Point(20, 16),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Theme.Surface,
+                ForeColor = Theme.Blue
+            };
+            exportBackButton.FlatAppearance.BorderColor = Theme.Border;
+            exportBackButton.Click += (s, e) => ShowReportScreen();
+
+            var copyButton = new Button
+            {
+                Text = "Copy to Clipboard",
+                Size = new Size(150, 32),
+                Location = new Point(110, 16),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Theme.Surface,
+                ForeColor = Theme.Green
+            };
+            copyButton.FlatAppearance.BorderColor = Theme.Border;
+            copyButton.Click += (s, e) =>
+            {
+                if (exportTextBox != null && !string.IsNullOrEmpty(exportTextBox.Text))
+                    Clipboard.SetText(exportTextBox.Text);
+            };
+
+            var openLogsButton = new Button
+            {
+                Text = "Open Logs Folder",
+                Size = new Size(140, 32),
+                Location = new Point(270, 16),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Theme.Surface,
+                ForeColor = Theme.Yellow
+            };
+            openLogsButton.FlatAppearance.BorderColor = Theme.Border;
+            openLogsButton.Click += (s, e) =>
+            {
+                string dir = savedLogsDir ?? savedReportsDir;
+                if (dir != null && Directory.Exists(dir))
+                {
+                    try { Process.Start("explorer.exe", dir); }
+                    catch { }
+                }
+            };
+
+            var exportTitle = new Label
+            {
+                Text = "EXPORT & SHARE",
+                Font = Theme.SubHeader,
+                ForeColor = Theme.Text,
+                Location = new Point(430, 22),
+                AutoSize = true
+            };
+
+            exportHeader.Controls.AddRange(new Control[] { exportBackButton, copyButton, openLogsButton, exportTitle });
+
+            exportTextBox = new RichTextBox
+            {
+                Dock = DockStyle.Fill,
+                ReadOnly = true,
+                BackColor = Theme.Bg,
+                ForeColor = Theme.Text,
+                Font = new Font("Courier New", 9f),
+                ScrollBars = RichTextBoxScrollBars.Vertical,
+                BorderStyle = BorderStyle.None,
+                Padding = new Padding(20)
+            };
+
+            exportPanel.Controls.Add(exportTextBox);
+            exportPanel.Controls.Add(exportHeader);
+        }
+
+        // =================================================================
+        // SCAN EXECUTION
+        // =================================================================
+        void StartScan()
+        {
+            cancelled = false;
+            scanResults.Clear();
+            logBox.Clear();
+            progressBar.Value = 0;
+            startButton.Enabled = false;
+            cancelButton.Enabled = true;
+
+            string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            string logsTimestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+            tempBase = Path.Combine(Path.GetTempPath(), "TriageToolkit-" + timestamp);
+            string modulesDir = Path.Combine(tempBase, "modules");
+            string libDir = Path.Combine(tempBase, "lib");
+            string exeDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            reportsDir = Path.Combine(exeDir, "Logs", Environment.MachineName, logsTimestamp);
+
+            try
+            {
+                Directory.CreateDirectory(modulesDir);
+                Directory.CreateDirectory(libDir);
+                Directory.CreateDirectory(reportsDir);
+
+                ExtractResource("Common.ps1", Path.Combine(libDir, "Common.ps1"));
+                foreach (string module in Modules.Files)
+                    ExtractResource(module, Path.Combine(modulesDir, module));
+            }
+            catch (Exception ex)
+            {
+                AppendLog("[FAIL] Could not extract scripts: " + ex.Message, Theme.Red);
+                startButton.Enabled = true;
+                cancelButton.Enabled = false;
+                return;
+            }
+
+            workerThread = new Thread(() => RunAllModules(modulesDir));
+            workerThread.IsBackground = true;
+            workerThread.Start();
+        }
+
+        void RunAllModules(string modulesDir)
+        {
+            int completed = 0;
+
+            for (int i = 0; i < Modules.Files.Length; i++)
+            {
+                if (cancelled) break;
+
+                string modulePath = Path.Combine(modulesDir, Modules.Files[i]);
+                string moduleName = Modules.Names[i];
+                int idx = i;
+
+                Invoke((Action)(() =>
+                {
+                    statusLabel.Text = string.Format("Running module {0} of 10...", idx + 1);
+                    moduleLabel.Text = string.Format("[{0}/10] {1}", idx + 1, moduleName);
+                    progressBar.Value = idx;
+                }));
+
+                AppendLog(string.Format("\n--- [{0}/10] {1} ---", i + 1, moduleName), Theme.Blue);
+
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "powershell.exe",
+                    Arguments = string.Format("-NoProfile -ExecutionPolicy Bypass -File \"{0}\"", modulePath),
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true,
+                    WorkingDirectory = modulesDir
+                };
+                psi.EnvironmentVariables["TRIAGE_REPORT_DIR"] = reportsDir;
+
+                try
+                {
+                    using (var proc = new Process())
+                    {
+                        proc.StartInfo = psi;
+                        proc.OutputDataReceived += (s, e) =>
+                        {
+                            if (!string.IsNullOrEmpty(e.Data))
+                                AppendLog(e.Data, Theme.Muted);
+                        };
+                        proc.ErrorDataReceived += (s, e) =>
+                        {
+                            if (!string.IsNullOrEmpty(e.Data))
+                                AppendLog("[ERR] " + e.Data, Theme.Yellow);
+                        };
+
+                        proc.Start();
+                        proc.BeginOutputReadLine();
+                        proc.BeginErrorReadLine();
+
+                        while (!proc.WaitForExit(500))
+                        {
+                            if (cancelled) { try { proc.Kill(); } catch { } break; }
+                        }
+
+                        if (!cancelled)
+                        {
+                            completed++;
+                            AppendLog(string.Format("  [OK] {0} complete", moduleName), Theme.Green);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AppendLog(string.Format("  [FAIL] {0}: {1}", moduleName, ex.Message), Theme.Red);
+                }
+            }
+
+            // Scan complete
+            Invoke((Action)(() =>
+            {
+                progressBar.Value = cancelled ? progressBar.Value : 11;
+                statusLabel.Text = cancelled
+                    ? "Scan cancelled."
+                    : string.Format("Scan complete -- {0}/10 modules + export finished.", completed);
+                moduleLabel.Text = "";
+                startButton.Enabled = true;
+                cancelButton.Enabled = false;
+
+                if (!cancelled && completed > 0)
+                {
+                    savedReportsDir = reportsDir;
+                    savedLogsDir = reportsDir;
+
+                    AppendLog("\nReports saved to: " + savedReportsDir, Theme.Green);
+
+                    // Parse JSON results from saved location
+                    LoadJsonResults(savedReportsDir);
+
+                    // Save to history
+                    int totalRed = scanResults.Sum(r => r.Red);
+                    int totalYellow = scanResults.Sum(r => r.Yellow);
+                    SaveHistory(new ScanRecord
+                    {
+                        Timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
+                        Hostname = Environment.MachineName,
+                        ReportPath = savedReportsDir,
+                        TotalRed = totalRed,
+                        TotalYellow = totalYellow,
+                        ModulesCompleted = completed
+                    });
+                    LoadHistory();
+
+                    AppendLog("Click 'View Results' to see the report, or 'Open HTML Reports' for browser view.", Theme.Blue);
+
+                    // Update button state
+                    hasResults = true;
+                    startButton.Text = "View Results";
+
+                    // Auto-show report
+                    ShowReportScreen();
+                }
+            }));
+
+            // Cleanup temp scripts — reports are written directly to Logs\ next to exe
+            try
+            {
+                // Small delay to ensure file handles are released
+                Thread.Sleep(1000);
+                if (Directory.Exists(tempBase))
+                    Directory.Delete(tempBase, true);
+            }
+            catch { }
+        }
+
+        // =================================================================
+        // REPORT VIEWER
+        // =================================================================
+        void LoadJsonResults(string dir)
+        {
+            scanResults.Clear();
+            if (!Directory.Exists(dir)) return;
+
+            foreach (string jsonFile in Directory.GetFiles(dir, "*.json").OrderBy(f => f))
+            {
+                try
+                {
+                    string json = File.ReadAllText(jsonFile);
+                    var result = ParseModuleJson(json);
+                    if (result != null)
+                        scanResults.Add(result);
+                }
+                catch { }
+            }
+        }
+
+        // Minimal JSON parser -- no external dependencies
+        ModuleResult ParseModuleJson(string json)
+        {
+            var r = new ModuleResult();
+            r.Module = ExtractJsonString(json, "module");
+            r.Title = ExtractJsonString(json, "title");
+            r.Hostname = ExtractJsonString(json, "hostname");
+            r.ScanTime = ExtractJsonString(json, "scanTime");
+
+            // Parse summary
+            var summaryMatch = Regex.Match(json, "\"summary\"\\s*:\\s*\\{([^}]+)\\}");
+            if (summaryMatch.Success)
+            {
+                string summary = summaryMatch.Groups[1].Value;
+                int.TryParse(ExtractJsonNumber(summary, "red"), out r.Red);
+                int.TryParse(ExtractJsonNumber(summary, "yellow"), out r.Yellow);
+                int.TryParse(ExtractJsonNumber(summary, "green"), out r.Green);
+                int.TryParse(ExtractJsonNumber(summary, "info"), out r.Info);
+            }
+
+            // Parse findings array
+            var findingsMatch = Regex.Match(json, "\"findings\"\\s*:\\s*\\[(.+?)\\]\\s*,\\s*\"summary\"", RegexOptions.Singleline);
+            if (findingsMatch.Success)
+            {
+                string findingsBlock = findingsMatch.Groups[1].Value;
+                var objectMatches = Regex.Matches(findingsBlock, "\\{([^{}]+)\\}");
+                foreach (Match m in objectMatches)
+                {
+                    var f = new Finding
+                    {
+                        Severity = ExtractJsonString(m.Value, "severity"),
+                        Title = ExtractJsonString(m.Value, "title"),
+                        Detail = ExtractJsonString(m.Value, "detail"),
+                        WhyItMatters = ExtractJsonString(m.Value, "whyItMatters"),
+                        WhyMightBeNormal = ExtractJsonString(m.Value, "whyMightBeNormal")
+                    };
+                    r.Findings.Add(f);
+                }
+            }
+
+            return r;
+        }
+
+        string ExtractJsonString(string json, string key)
+        {
+            var m = Regex.Match(json, "\"" + key + "\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+            return m.Success ? m.Groups[1].Value.Replace("\\n", "\n").Replace("\\\"", "\"").Replace("\\\\", "\\") : "";
+        }
+
+        string ExtractJsonNumber(string json, string key)
+        {
+            var m = Regex.Match(json, "\"" + key + "\"\\s*:\\s*(\\d+)");
+            return m.Success ? m.Groups[1].Value : "0";
+        }
+
+        void ShowReportScreen()
+        {
+            scanPanel.Visible = false;
+            exportPanel.Visible = false;
+            reportPanel.Visible = true;
+            reportPanel.BringToFront();
+            RenderReport();
+        }
+
+        void ShowExportScreen()
+        {
+            string exportPath = savedReportsDir != null
+                ? Path.Combine(savedReportsDir, "10_Correlation_Export.txt")
+                : null;
+
+            if (exportTextBox != null)
+            {
+                if (exportPath != null && File.Exists(exportPath))
+                    exportTextBox.Text = File.ReadAllText(exportPath);
+                else
+                    exportTextBox.Text = "10_Correlation_Export.txt not found.\r\n\r\nRun a full scan first — the file is generated by Module 10 (Cross-Module Correlation).";
+            }
+
+            scanPanel.Visible = false;
+            reportPanel.Visible = false;
+            exportPanel.Visible = true;
+            exportPanel.BringToFront();
+        }
+
+        void ShowScanScreen()
+        {
+            reportPanel.Visible = false;
+            exportPanel.Visible = false;
+            scanPanel.Visible = true;
+            scanPanel.BringToFront();
+            // Keep "View Results" text if we have results, so user can go back
+            if (hasResults)
+                startButton.Text = "View Results";
+            else
+                startButton.Text = "Start Scan";
+        }
+
+        void RenderReport()
+        {
+            reportBody.Controls.Clear();
+            int y = 10;
+
+            if (scanResults.Count == 0)
+            {
+                var noData = new Label
+                {
+                    Text = "No scan results available. Run a scan first.",
+                    ForeColor = Theme.Muted,
+                    Location = new Point(10, y),
+                    AutoSize = true
+                };
+                reportBody.Controls.Add(noData);
+                return;
+            }
+
+            // Summary bar
+            int totalRed = scanResults.Sum(r => r.Red);
+            int totalYellow = scanResults.Sum(r => r.Yellow);
+            int totalGreen = scanResults.Sum(r => r.Green);
+            int totalInfo = scanResults.Sum(r => r.Info);
+
+            var summaryPanel = new FlowLayoutPanel
+            {
+                Location = new Point(10, y),
+                Size = new Size(820, 40),
+                FlowDirection = FlowDirection.LeftToRight,
+                BackColor = Color.Transparent
+            };
+
+            if (totalRed > 0) AddPill(summaryPanel, totalRed + " Critical", Theme.Red, Theme.RedBg);
+            if (totalYellow > 0) AddPill(summaryPanel, totalYellow + " Warning", Theme.Yellow, Theme.YellowBg);
+            if (totalGreen > 0) AddPill(summaryPanel, totalGreen + " Clean", Theme.Green, Theme.GreenBg);
+            if (totalInfo > 0) AddPill(summaryPanel, totalInfo + " Info", Theme.Blue, Theme.BlueBg);
+            if (totalRed == 0 && totalYellow == 0) AddPill(summaryPanel, "All Clear", Theme.Green, Theme.GreenBg);
+
+            reportBody.Controls.Add(summaryPanel);
+            y += 50;
+
+            // Host info
+            if (scanResults.Count > 0)
+            {
+                var hostInfo = new Label
+                {
+                    Text = string.Format("Host: {0}  |  Scan: {1}  |  {2} modules",
+                        scanResults[0].Hostname, scanResults[0].ScanTime, scanResults.Count),
+                    Font = Theme.Body,
+                    ForeColor = Theme.Muted,
+                    Location = new Point(10, y),
+                    AutoSize = true
+                };
+                reportBody.Controls.Add(hostInfo);
+                y += 30;
+            }
+
+            // Module sections
+            foreach (var result in scanResults)
+            {
+                var sectionPanel = CreateModuleSection(result, 820);
+                sectionPanel.Location = new Point(10, y);
+                reportBody.Controls.Add(sectionPanel);
+                y += sectionPanel.Height + 10;
+            }
+        }
+
+        Panel CreateModuleSection(ModuleResult result, int width)
+        {
+            var panel = new Panel
+            {
+                Size = new Size(width, 44), // starts collapsed header only
+                BackColor = Theme.Surface,
+                BorderStyle = BorderStyle.None
+            };
+
+            // Draw border
+            panel.Paint += (s, e) =>
+            {
+                using (var pen = new Pen(Theme.Border))
+                    e.Graphics.DrawRectangle(pen, 0, 0, panel.Width - 1, panel.Height - 1);
+            };
+
+            // Header
+            var header = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 42,
+                BackColor = Color.FromArgb(20, 255, 255, 255),
+                Cursor = Cursors.Hand
+            };
+
+            var modNum = new Label
+            {
+                Text = "[" + result.Module + "]",
+                Font = Theme.Badge,
+                ForeColor = Theme.Blue,
+                Location = new Point(12, 13),
+                AutoSize = true
+            };
+
+            var modTitle = new Label
+            {
+                Text = result.Title,
+                Font = Theme.SubHeader,
+                ForeColor = Theme.Text,
+                Location = new Point(50, 10),
+                AutoSize = true
+            };
+
+            // Status pills in header
+            string statusText = "";
+            Color statusColor = Theme.Green;
+            if (result.Red > 0) { statusText = result.Red + " Critical"; statusColor = Theme.Red; }
+            else if (result.Yellow > 0) { statusText = result.Yellow + " Warning"; statusColor = Theme.Yellow; }
+            else { statusText = "Clean"; statusColor = Theme.Green; }
+
+            var statusLabel2 = new Label
+            {
+                Text = statusText,
+                Font = Theme.Badge,
+                ForeColor = statusColor,
+                Location = new Point(width - 120, 14),
+                AutoSize = true
+            };
+
+            header.Controls.AddRange(new Control[] { modNum, modTitle, statusLabel2 });
+
+            // Body (findings)
+            var body = new Panel
+            {
+                Location = new Point(0, 42),
+                Size = new Size(width, 0),
+                BackColor = Theme.Surface,
+                Visible = false,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowOnly
+            };
+
+            int fy = 8;
+            if (result.Findings.Count == 0)
+            {
+                var noFindings = new Label
+                {
+                    Text = "[OK] No findings in this module.",
+                    ForeColor = Theme.Muted,
+                    Font = Theme.Body,
+                    Location = new Point(12, fy),
+                    AutoSize = true
+                };
+                body.Controls.Add(noFindings);
+                fy += 30;
+            }
+            else
+            {
+                // Sort: RED first, then YELLOW, GREEN, INFO
+                var sorted = result.Findings.OrderBy(f =>
+                    f.Severity == "RED" ? 0 : f.Severity == "YELLOW" ? 1 :
+                    f.Severity == "GREEN" ? 2 : 3).ToList();
+
+                foreach (var finding in sorted)
+                {
+                    var findingPanel = CreateFindingPanel(finding, width - 30);
+                    findingPanel.Location = new Point(12, fy);
+                    body.Controls.Add(findingPanel);
+                    fy += findingPanel.Height + 6;
+                }
+            }
+
+            body.Size = new Size(width, fy + 8);
+
+            // Toggle collapse -- using array to allow mutation inside lambda (C# 5 compatible)
+            bool[] expanded = new bool[] { false };
+            EventHandler toggleHandler = (s, e) =>
+            {
+                expanded[0] = !expanded[0];
+                body.Visible = expanded[0];
+                panel.Height = expanded[0] ? 42 + body.Height : 44;
+            };
+            header.Click += toggleHandler;
+            foreach (Control c in header.Controls) c.Click += toggleHandler;
+
+            panel.Controls.Add(body);
+            panel.Controls.Add(header);
+
+            return panel;
+        }
+
+        Panel CreateFindingPanel(Finding f, int width)
+        {
+            Color borderColor = Theme.SeverityColor(f.Severity);
+            Color bgColor = Theme.SeverityBg(f.Severity);
+
+            var panel = new Panel
+            {
+                Size = new Size(width, 10), // will be sized after adding labels
+                BackColor = bgColor
+            };
+
+            panel.Paint += (s, e) =>
+            {
+                using (var pen = new Pen(borderColor, 3))
+                    e.Graphics.DrawLine(pen, 0, 0, 0, panel.Height);
+            };
+
+            int fy = 8;
+
+            // Severity badge + title
+            var titleLbl = new Label
+            {
+                Text = "[" + f.Severity + "] " + f.Title,
+                Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+                ForeColor = Theme.Text,
+                Location = new Point(10, fy),
+                MaximumSize = new Size(width - 20, 0),
+                AutoSize = true
+            };
+            panel.Controls.Add(titleLbl);
+            fy += titleLbl.Height + 4;
+
+            if (!string.IsNullOrEmpty(f.Detail))
+            {
+                var detailLbl = new Label
+                {
+                    Text = f.Detail,
+                    Font = Theme.MonoSmall,
+                    ForeColor = Theme.Text,
+                    Location = new Point(10, fy),
+                    MaximumSize = new Size(width - 20, 0),
+                    AutoSize = true
+                };
+                panel.Controls.Add(detailLbl);
+                fy += detailLbl.Height + 3;
+            }
+
+            if (!string.IsNullOrEmpty(f.WhyItMatters))
+            {
+                var whyLbl = new Label
+                {
+                    Text = f.WhyItMatters,
+                    Font = Theme.Body,
+                    ForeColor = Theme.Muted,
+                    Location = new Point(10, fy),
+                    MaximumSize = new Size(width - 20, 0),
+                    AutoSize = true
+                };
+                panel.Controls.Add(whyLbl);
+                fy += whyLbl.Height + 3;
+            }
+
+            if (!string.IsNullOrEmpty(f.WhyMightBeNormal))
+            {
+                var normalLbl = new Label
+                {
+                    Text = "[i] May be normal: " + f.WhyMightBeNormal,
+                    Font = new Font("Segoe UI", 8.5f, FontStyle.Italic),
+                    ForeColor = Theme.Muted,
+                    Location = new Point(10, fy),
+                    MaximumSize = new Size(width - 20, 0),
+                    AutoSize = true
+                };
+                panel.Controls.Add(normalLbl);
+                fy += normalLbl.Height + 3;
+            }
+
+            panel.Height = fy + 8;
+            return panel;
+        }
+
+        void AddPill(FlowLayoutPanel parent, string text, Color fg, Color bg)
+        {
+            var pill = new Label
+            {
+                Text = "  " + text + "  ",
+                Font = Theme.Badge,
+                ForeColor = fg,
+                BackColor = bg,
+                AutoSize = true,
+                Padding = new Padding(6, 4, 6, 4),
+                Margin = new Padding(0, 4, 8, 4)
+            };
+            parent.Controls.Add(pill);
+        }
+
+        void OpenHtmlReports()
+        {
+            string dir = savedReportsDir ?? reportsDir;
+            if (dir != null && Directory.Exists(dir))
+            {
+                string[] htmlFiles = Directory.GetFiles(dir, "*.html");
+                if (htmlFiles.Length > 0)
+                {
+                    Array.Sort(htmlFiles);
+                    try { Process.Start(new ProcessStartInfo(htmlFiles[0]) { UseShellExecute = true }); }
+                    catch { }
+                    return;
+                }
+            }
+            MessageBox.Show("No HTML reports found. Run a scan first.", "No Reports",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        // =================================================================
+        // SCAN HISTORY
+        // =================================================================
+        string HistoryPath
+        {
+            get
+            {
+                string dir = Path.Combine(Environment.GetFolderPath(
+                    Environment.SpecialFolder.ApplicationData), "TriageToolkit");
+                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                return Path.Combine(dir, "scan_history.json");
+            }
+        }
+
+        void LoadHistory()
+        {
+            historyList.Items.Clear();
+            try
+            {
+                if (!File.Exists(HistoryPath)) return;
+                string json = File.ReadAllText(HistoryPath);
+                // Parse simple array of objects
+                var entries = Regex.Matches(json, "\\{([^}]+)\\}");
+                foreach (Match m in entries)
+                {
+                    string entry = m.Value;
+                    var item = new ListViewItem(ExtractJsonString(entry, "timestamp"));
+                    item.SubItems.Add(ExtractJsonString(entry, "hostname"));
+                    item.SubItems.Add(ExtractJsonNumber(entry, "totalRed"));
+                    item.SubItems.Add(ExtractJsonNumber(entry, "totalYellow"));
+                    item.SubItems.Add(ExtractJsonNumber(entry, "modulesCompleted"));
+                    item.SubItems.Add(ExtractJsonString(entry, "reportPath"));
+                    historyList.Items.Insert(0, item); // newest first
+                }
+            }
+            catch { }
+        }
+
+        void SaveHistory(ScanRecord record)
+        {
+            try
+            {
+                string existing = "[]";
+                if (File.Exists(HistoryPath))
+                    existing = File.ReadAllText(HistoryPath);
+
+                // Append to array
+                string entry = string.Format(
+                    "{{\"timestamp\":\"{0}\",\"hostname\":\"{1}\",\"totalRed\":{2},\"totalYellow\":{3},\"modulesCompleted\":{4},\"reportPath\":\"{5}\"}}",
+                    record.Timestamp, record.Hostname, record.TotalRed, record.TotalYellow,
+                    record.ModulesCompleted, record.ReportPath.Replace("\\", "\\\\"));
+
+                if (existing.Trim() == "[]")
+                    existing = "[" + entry + "]";
+                else
+                    existing = existing.TrimEnd().TrimEnd(']') + "," + entry + "]";
+
+                File.WriteAllText(HistoryPath, existing);
+            }
+            catch { }
+        }
+
+        // =================================================================
+        // UTILITY
+        // =================================================================
+        void AppendLog(string text, Color color)
+        {
+            if (logBox.InvokeRequired)
+            {
+                logBox.BeginInvoke((Action)(() => AppendLog(text, color)));
+                return;
+            }
+            logBox.SelectionStart = logBox.TextLength;
+            logBox.SelectionLength = 0;
+            logBox.SelectionColor = color;
+            logBox.AppendText(text + "\n");
+            logBox.ScrollToCaret();
+        }
+
+        void AppendLog(string text) { AppendLog(text, Theme.Muted); }
+
+        static void ExtractResource(string resourceName, string outputPath)
+        {
+            string fullName = "TriageToolkit.scripts." + resourceName;
+            using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(fullName))
+            {
+                if (stream == null)
+                    throw new FileNotFoundException("Embedded resource not found: " + fullName);
+                using (FileStream fs = new FileStream(outputPath, FileMode.Create, FileAccess.Write))
+                    stream.CopyTo(fs);
+            }
+        }
+
+        static void CopyDir(string src, string dst)
+        {
+            Directory.CreateDirectory(dst);
+            foreach (string f in Directory.GetFiles(src))
+                File.Copy(f, Path.Combine(dst, Path.GetFileName(f)), true);
+            foreach (string d in Directory.GetDirectories(src))
+                CopyDir(d, Path.Combine(dst, Path.GetFileName(d)));
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            cancelled = true;
+            base.OnFormClosing(e);
+        }
+    }
+}

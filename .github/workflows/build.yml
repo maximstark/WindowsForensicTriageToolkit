@@ -1,0 +1,106 @@
+# =============================================================================
+# GitHub Actions — Build and Release Pipeline
+# =============================================================================
+# Triggers:
+#   - Push to main (builds and uploads artifact)
+#   - Tag push v* (builds, creates release, uploads .exe and checksums)
+#   - Pull request (build verification only)
+# =============================================================================
+
+name: Build Triage Toolkit
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Verify source files
+      shell: powershell
+      run: |
+        $required = @(
+          "src\lib\Common.ps1",
+          "src\TriageLauncher.cs",
+          "src\TriageLauncher.manifest"
+        )
+        1..9 | ForEach-Object {
+          $num = $_.ToString("D2")
+          $found = Get-ChildItem "src\modules\${num}_*.ps1" -ErrorAction SilentlyContinue
+          if (-not $found) { $required += "src\modules\${num}_*.ps1 (MISSING)" }
+        }
+        $missing = $required | Where-Object { -not (Test-Path $_) }
+        if ($missing) {
+          Write-Host "Missing files:" -ForegroundColor Red
+          $missing | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+          exit 1
+        }
+        Write-Host "All source files verified." -ForegroundColor Green
+
+    - name: Build executable
+      shell: powershell
+      run: .\build.ps1
+
+    - name: Verify build output
+      shell: powershell
+      run: |
+        if (-not (Test-Path "build\TriageToolkit.exe")) {
+          Write-Host "Build output not found!" -ForegroundColor Red
+          exit 1
+        }
+        $hash = (Get-FileHash "build\TriageToolkit.exe" -Algorithm SHA256).Hash
+        Write-Host "Build successful: $hash" -ForegroundColor Green
+
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: TriageToolkit
+        path: |
+          build/TriageToolkit.exe
+          build/checksums.json
+          build/build_info.json
+
+  release:
+    needs: build
+    runs-on: windows-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Download build artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: TriageToolkit
+        path: release/
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          release/TriageToolkit.exe
+          release/checksums.json
+          release/build_info.json
+        body: |
+          ## Windows Forensic Triage Toolkit ${{ github.ref_name }}
+          
+          ### Download
+          Download `TriageToolkit.exe` below. Copy to target machine and double-click to run.
+          
+          ### Verification
+          Compare `checksums.json` against a local build from the same tag to verify integrity.
+          
+          ### Requirements
+          - Windows 10 or Windows 11
+          - Administrator privileges (UAC prompt will appear automatically)
+        draft: false
+        prerelease: false

@@ -1,0 +1,24 @@
+# Build outputs
+build/
+*.exe
+
+# Reports (generated at runtime)
+Reports/
+
+# Build logs
+*.log
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Scan logs and reports
+Logs/
+*.json
