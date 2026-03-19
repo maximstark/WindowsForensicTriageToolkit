@@ -22,3 +22,6 @@ Desktop.ini
 # Scan logs and reports
 Logs/
 *.json
+
+# Editor/tool backups
+*.bak
