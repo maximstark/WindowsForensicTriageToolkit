@@ -282,11 +282,14 @@ foreach ($f06 in $mod06findings) {
     }
 
     if (-not $matched) {
-        $correlatedConcerns += New-Finding -Severity $SEV_RED `
+        # v2.0: YELLOW, not RED. Store apps, portable apps and per-user installs
+        # (Steam, Teams, Epic, Plex...) often have run keys but no uninstall entry,
+        # so on its own this is a lead to check, not a near-certain compromise.
+        $correlatedConcerns += New-Finding -Severity $SEV_YELLOW `
             -Title "Correlated Concern: Run key '$entryName' has no corresponding installation record (>90 days old)" `
             -Detail "No installed software found matching this run key entry. Created: $(if($createdDate){$createdDate}else{'unknown'}). Sources: Module 06 (run key), Module 05 (software)." `
-            -WhyItMatters "An old persistence entry with no matching installed software is a significant indicator of a leftover malware foothold." `
-            -WhyMightBeNormal "Software may have been uninstalled without cleaning its registry entry."
+            -WhyItMatters "An old persistence entry with no matching installed software can be a leftover malware foothold." `
+            -WhyMightBeNormal "Per-user, portable and Microsoft Store apps often register a run key without an uninstall entry. Software may also have been uninstalled without cleaning its registry entry."
     }
 }
 
@@ -396,7 +399,9 @@ foreach ($f06 in $mod06findings) {
             -Detail "A software install record matches this run key. The file may have been removed during uninstall without cleaning the registry. Sources: Module 06 (run key), Module 05 (software)." `
             -WhyItMatters "Orphaned run key is consistent with incomplete uninstallation of a known application."
     } else {
-        $correlatedConcerns += New-Finding -Severity $SEV_RED `
+        # v2.0: YELLOW. A dangling run key is far more often an untidy uninstall than
+        # anti-forensics; it is worth a look, not a near-certain compromise.
+        $correlatedConcerns += New-Finding -Severity $SEV_YELLOW `
             -Title "Correlated Concern: Run key '$entryName' points to missing file with no corresponding uninstall record" `
             -Detail "No installed or recently installed software matches this run key. The referenced file is missing. Sources: Module 06 (run key), Module 05 (software)." `
             -WhyItMatters "An orphaned run key with no known software match may indicate deliberate file deletion after malware execution." `
@@ -474,6 +479,10 @@ if ($defenderActive -and $noDetections -and $lsassPPL -and $wdigestDisabled -and
         -Detail "Controls not confirmed GREEN: $($missing -join ', '). Source: Module 03 (security config)." `
         -WhyItMatters "One or more critical security controls are not confirmed active. Review Module 03 for details."
 }
+
+# v2.0: the same run key can arrive twice (HKCU and HKLM, or two patterns);
+# report each distinct concern once.
+$correlatedConcerns = @($correlatedConcerns | Group-Object Title | ForEach-Object { $_.Group[0] })
 
 Write-Host ""
 Write-Host "(*) Computing noise-adjusted score..."

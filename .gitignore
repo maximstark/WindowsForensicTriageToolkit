@@ -2,15 +2,18 @@
 build/
 *.exe
 
-# Reports (generated at runtime)
+# Scan output (real scans contain host names, accounts, paths and IPs)
+Logs/
 Reports/
-
-# Build logs
 *.log
+*.json
+# ...except the synthetic demo scan, which is part of the repo
+!samples/**/*.json
 
 # IDE
 .vs/
 .vscode/
+.claude/
 *.user
 *.suo
 
@@ -18,10 +21,6 @@ Reports/
 Thumbs.db
 Desktop.ini
 .DS_Store
-
-# Scan logs and reports
-Logs/
-*.json
 
 # Editor/tool backups
 *.bak

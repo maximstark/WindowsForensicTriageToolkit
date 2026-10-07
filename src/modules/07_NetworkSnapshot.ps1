@@ -268,14 +268,16 @@ try {
     $vncListen = $listening | Where-Object { $_.LocalPort -in @(5900, 5901, 5902) }
 
     if ($sshListen) {
-        $allFindings += New-Finding -Severity $SEV_RED `
+        # v2.0: SSH/RDP listeners are YELLOW -- often deliberate (remote work, Tailscale,
+        # admin access); the question is whether the owner knows. VNC stays RED.
+        $allFindings += New-Finding -Severity $SEV_YELLOW `
             -Title "SSH Server Is LISTENING on Port 22" `
             -Detail "Process: $(($sshListen | ForEach-Object { (Get-Process -Id $_.OwningProcess -EA SilentlyContinue).Name }) -join ', ')" `
             -WhyItMatters "An SSH server provides remote shell access to this machine. On a home machine this should not be running unless deliberately configured." `
             -WhyMightBeNormal "Windows now includes OpenSSH server as an optional feature. Developers and IT professionals sometimes enable it."
     }
     if ($rdpListen) {
-        $allFindings += New-Finding -Severity $SEV_RED `
+        $allFindings += New-Finding -Severity $SEV_YELLOW `
             -Title "RDP Server Is LISTENING on Port 3389" `
             -Detail "Remote Desktop is accepting inbound connections." `
             -WhyItMatters "An active RDP server allows anyone who can reach this port to attempt to connect remotely. Home edition should not have this active by default." `

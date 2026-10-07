@@ -5,3 +5,5 @@
 *.xaml text eol=crlf
 *.png binary
 *.ico binary
+samples/** -text
+docs/screenshots/** binary

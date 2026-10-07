@@ -1,0 +1,43 @@
+﻿{
+    "version":  "2.0",
+    "scanTime":  "2026-09-30 09:14:05",
+    "module":  "02",
+    "title":  "Storage \u0026 Files",
+    "admin":  true,
+    "findings":  [
+                     {
+                         "detail":  "Protection status: Off | Encryption method: None",
+                         "whyItMatters":  "A lost or stolen laptop exposes every file on the disk.",
+                         "whyMightBeNormal":  "Some desktops in physically secured offices run unencrypted by policy.",
+                         "createdDate":  "",
+                         "severity":  "YELLOW",
+                         "title":  "BitLocker Not Active on System Drive (C:)",
+                         "sid":  ""
+                     },
+                     {
+                         "detail":  "C:\\Users\\jdoe\\AppData\\Roaming\\SyncHelper\\synchelper.exe | 2.1 MB | Created 2026-09-29",
+                         "whyItMatters":  "Malware commonly installs to AppData because it needs no admin rights.",
+                         "whyMightBeNormal":  "Some small vendors ship unsigned helpers into AppData.",
+                         "createdDate":  "",
+                         "severity":  "YELLOW",
+                         "title":  "Unsigned Executable in User-Writable Location",
+                         "sid":  ""
+                     },
+                     {
+                         "detail":  "Checked 412 files across Public, ProgramData and Temp",
+                         "whyItMatters":  "Shared folders are a favourite drop location.",
+                         "whyMightBeNormal":  "",
+                         "createdDate":  "",
+                         "severity":  "GREEN",
+                         "title":  "No Executables in C:\\Users\\Public",
+                         "sid":  ""
+                     }
+                 ],
+    "summary":  {
+                    "info":  0,
+                    "red":  0,
+                    "green":  1,
+                    "yellow":  2
+                },
+    "hostname":  "DEMO-WS01"
+}

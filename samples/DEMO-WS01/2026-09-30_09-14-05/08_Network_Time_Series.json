@@ -1,0 +1,34 @@
+﻿{
+    "version":  "2.0",
+    "scanTime":  "2026-09-30 09:14:05",
+    "module":  "08",
+    "title":  "Network Time Series",
+    "admin":  true,
+    "findings":  [
+                     {
+                         "detail":  "Sent 18.4 MB | Received 211.7 MB over 5 minutes on Wi-Fi",
+                         "whyItMatters":  "Context for judging whether any connection is unusually heavy.",
+                         "whyMightBeNormal":  "",
+                         "createdDate":  "",
+                         "severity":  "INFO",
+                         "title":  "Network Traffic During Monitoring Period",
+                         "sid":  ""
+                     },
+                     {
+                         "detail":  "Port 443 | Process: synchelper.exe | Seen in 6/10 polls | Reverse DNS: none",
+                         "whyItMatters":  "Outbound traffic from an unsigned AppData binary to an IP with no DNS name deserves a look.",
+                         "whyMightBeNormal":  "Content delivery networks often have no reverse DNS.",
+                         "createdDate":  "",
+                         "severity":  "YELLOW",
+                         "title":  "Connection to Unidentified IP: 198.51.100.23",
+                         "sid":  ""
+                     }
+                 ],
+    "summary":  {
+                    "info":  1,
+                    "red":  0,
+                    "green":  0,
+                    "yellow":  1
+                },
+    "hostname":  "DEMO-WS01"
+}

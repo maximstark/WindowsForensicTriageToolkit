@@ -1,6 +1,6 @@
 # =============================================================================
 # Common.ps1 -- Shared Library for Windows Forensic Triage Toolkit
-# Version: 1.5
+# Version: 2.0
 # Compatible: Windows 10/11, PowerShell 5.1+
 # =============================================================================
 
@@ -10,7 +10,7 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 
 # --- CONSTANTS ----------------------------------------------------------------
 
-$TOOLKIT_VERSION = "1.5"
+$TOOLKIT_VERSION = "2.0"
 
 $SEV_GREEN  = "GREEN"
 $SEV_YELLOW = "YELLOW"
@@ -65,6 +65,7 @@ $WHITELISTED_APPDATA_PATHS = @(
     "*\AppData\Roaming\uv\*",
     # Task 3: Toolkit self-exclusion and additional noise-reduction paths
     "*\Temp\TriageToolkit-*\*",
+    "*\ProgramData\TriageToolkit-run-*\*",
     "*\Windows\AppRepository\Packages\MicrosoftWindows.Client.*",
     "*\Temp\is-*.tmp\*",
     "*\Temp\nsc*.tmp\*",
@@ -217,6 +218,45 @@ function Test-IsWhitelistedPath {
     return $false
 }
 
+# --- WINLOGON SAFE VALUES (used by module 06) -------------------------------
+# Stock Windows executables expected in Winlogon Shell/Userinit values
+$WINLOGON_SAFE_EXES = @(
+    'userinit.exe', 'explorer.exe', 'sihost.exe', 'ShellAppRuntime.exe',
+    'winlogon.exe', 'wininit.exe', 'csrss.exe', 'lsass.exe', 'services.exe'
+)
+
+function Test-IsSafeWinlogonValue {
+    param([string]$Value)
+    $systemDirs = @(
+        [Environment]::ExpandEnvironmentVariables('%SystemRoot%').TrimEnd('\'),
+        [Environment]::ExpandEnvironmentVariables('%SystemRoot%\System32').TrimEnd('\'),
+        [Environment]::ExpandEnvironmentVariables('%SystemRoot%\SysWOW64').TrimEnd('\')
+    )
+    $entries = @($Value -split ',' | ForEach-Object { $_.Trim().Trim('"') } | Where-Object { $_ })
+    if ($entries.Count -eq 0) { return $false }
+    foreach ($entry in $entries) {
+        $exe  = ($entry -split '\s+')[0]
+        $exe  = [Environment]::ExpandEnvironmentVariables($exe)
+        $leaf = Split-Path $exe -Leaf
+        if ($WINLOGON_SAFE_EXES -notcontains $leaf) { return $false }
+        $dir = Split-Path $exe -Parent
+        if ($dir -and ($systemDirs -notcontains $dir.TrimEnd('\'))) { return $false }
+    }
+    return $true
+}
+
+# --- DEVELOPER ENVIRONMENTS (used by module 02) ----------------------------
+# Package-manager folders full of unsigned-by-design launchers and libraries
+function Test-IsDevEnvironmentDir([string]$Dir) {
+    if ($Dir -match '(?i)\\(site-packages|node_modules|\.venv|venv|\.cargo|\.rustup|go\\bin|\.tox|\.nox|conda|miniconda\d*|anaconda\d*|pipx|\.local\\bin)(\\|$)') { return $true }
+    if ($Dir -match '(?i)\\uv\\(python|tools|cache)\\') { return $true }
+    $parent = Split-Path $Dir -Parent
+    foreach ($probe in @((Join-Path $Dir "python.exe"), (Join-Path $Dir "pyvenv.cfg"), (Join-Path $parent "pyvenv.cfg"), (Join-Path $parent "python.exe"))) {
+        if (Test-Path $probe -ErrorAction SilentlyContinue) { return $true }
+    }
+    return $false
+}
+
 # --- FLAGGING SYSTEM ---------------------------------------------------------
 
 function New-Finding {
@@ -252,7 +292,10 @@ function Write-ModuleJson {
         [string]$Hostname,
         [string]$ScanTime
     )
-    $jsonPath = Join-Path $ReportDir "${ModuleNumber}_${ModuleTitle -replace '[^a-zA-Z0-9]','_'}.json"
+    # v2.0: "${ModuleTitle -replace ...}" inside a string is a variable *name*, not an
+    # expression, so every file used to come out as "01_.json". Compute it first.
+    $safeTitle = $ModuleTitle -replace '[^a-zA-Z0-9]', '_'
+    $jsonPath  = Join-Path $ReportDir "${ModuleNumber}_$safeTitle.json"
     $output = @{
         module       = $ModuleNumber
         title        = $ModuleTitle
@@ -460,7 +503,8 @@ function ConvertTo-HtmlTable {
         [string[]]$Headers,
         [string[]]$Properties
     )
-    if (-not $Data -or $Data.Count -eq 0) {
+    $Data = @($Data | Where-Object { $null -ne $_ })
+    if ($Data.Count -eq 0) {
         return "<p class='no-findings'>No data found.</p>"
     }
     $html = "<table><thead><tr>"
@@ -488,14 +532,16 @@ function ConvertTo-HtmlFinding {
         default  { "finding-info" }
     }
     $badge  = Get-SeverityBadge -Severity $Finding.Severity
+    # v2.0: finding text carries attacker-controllable strings (PS history lines,
+    # task names, registry values, file paths) -- always encode before it reaches HTML.
     $normal = if ($Finding.WhyMightBeNormal) {
-        "<div class='finding-normal'>[i] May be normal: $($Finding.WhyMightBeNormal)</div>"
+        "<div class='finding-normal'>[i] May be normal: $(ConvertTo-HtmlEncoded $Finding.WhyMightBeNormal)</div>"
     } else { "" }
     return @"
 <div class="finding $class">
-  <div class="finding-title">$badge $($Finding.Title)</div>
-  <div class="finding-detail">$($Finding.Detail)</div>
-  <div class="finding-why">$($Finding.WhyItMatters)</div>
+  <div class="finding-title">$badge $(ConvertTo-HtmlEncoded $Finding.Title)</div>
+  <div class="finding-detail">$(ConvertTo-HtmlEncoded $Finding.Detail)</div>
+  <div class="finding-why">$(ConvertTo-HtmlEncoded $Finding.WhyItMatters)</div>
   $normal
 </div>
 "@
@@ -503,7 +549,8 @@ function ConvertTo-HtmlFinding {
 
 function ConvertTo-HtmlFindings {
     param([array]$Findings)
-    if (-not $Findings -or $Findings.Count -eq 0) {
+    $Findings = @($Findings | Where-Object { $_ })
+    if ($Findings.Count -eq 0) {
         return "<p class='no-findings'>[OK] No findings in this section.</p>"
     }
     $order  = @{ "RED" = 0; "YELLOW" = 1; "GREEN" = 2; "INFO" = 3 }
@@ -515,10 +562,12 @@ function ConvertTo-HtmlFindings {
 
 function Get-SummaryBar {
     param([array]$AllFindings)
-    $red    = ($AllFindings | Where-Object { $_.Severity -eq "RED"    }).Count
-    $yellow = ($AllFindings | Where-Object { $_.Severity -eq "YELLOW" }).Count
-    $green  = ($AllFindings | Where-Object { $_.Severity -eq "GREEN"  }).Count
-    $info   = ($AllFindings | Where-Object { $_.Severity -eq "INFO"   }).Count
+    # @() matters: on PS 5.1 a single PSCustomObject has no .Count, so one RED
+    # finding used to render as zero and the bar claimed "All Clear".
+    $red    = @($AllFindings | Where-Object { $_.Severity -eq "RED"    }).Count
+    $yellow = @($AllFindings | Where-Object { $_.Severity -eq "YELLOW" }).Count
+    $green  = @($AllFindings | Where-Object { $_.Severity -eq "GREEN"  }).Count
+    $info   = @($AllFindings | Where-Object { $_.Severity -eq "INFO"   }).Count
     return @"
 <div class="summary-bar">
   $(if ($red    -gt 0) { "<span class='pill pill-red'>$red Critical</span>" })

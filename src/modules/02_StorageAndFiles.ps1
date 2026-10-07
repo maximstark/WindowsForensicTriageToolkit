@@ -162,6 +162,8 @@ Write-Host "[*] Scanning for executables in suspicious locations..."
 Write-Host "    (This may take 1-2 minutes)"
 
 $suspiciousExes = @()
+$flaggedExes    = @()
+# v2.0: TEMP and LOCALAPPDATA\Temp are usually the same folder -- scan each once
 $scanPaths = @(
     $env:TEMP,
     $env:LOCALAPPDATA + "\Temp",
@@ -169,7 +171,9 @@ $scanPaths = @(
     $env:APPDATA,
     "C:\ProgramData",
     $env:PUBLIC
-)
+) | Where-Object { $_ -and (Test-Path $_ -ErrorAction SilentlyContinue) } |
+    ForEach-Object { (Resolve-Path $_ -ErrorAction SilentlyContinue).ProviderPath.TrimEnd('\') } |
+    Sort-Object -Unique
 
 foreach ($path in $scanPaths) {
     if (Test-Path $path -ErrorAction SilentlyContinue) {
@@ -198,16 +202,54 @@ foreach ($path in $scanPaths) {
             }
 
             if (-not $isKnown -and $publisher -ne "File not found") {
-                $sev = if ($publisher -eq "UNSIGNED") { $SEV_RED } else { $SEV_YELLOW }
-                $allFindings += New-Finding `
-                    -Severity $sev `
-                    -Title "$(if($publisher -eq 'UNSIGNED'){'Unsigned'} else {'Unknown publisher'}) executable in sensitive location: $($exe.Name)" `
-                    -Detail "Path: $($exe.FullName) | Publisher: $publisher | Created: $($exe.CreationTime.ToString('yyyy-MM-dd'))" `
-                    -WhyItMatters "Malware frequently installs to AppData/Temp because these locations don't require admin privileges to write to." `
-                    -WhyMightBeNormal "Some legitimate software installs helpers or updaters to AppData. Check the file name against known software."
+                $flaggedExes += [PSCustomObject]@{ File = $exe; Publisher = $publisher }
             }
         }
     }
+}
+
+# v2.0: one finding per FOLDER, not per file. Real machines carry dozens of
+# unsigned-by-design files in a handful of folders (pip/uv entry-point launchers,
+# wheel DLLs with hash suffixes, numbered build-tool copies in Temp); one line per
+# file buried real signals. Severity follows what is in the folder:
+#   developer environment (venv, site-packages, Scripts beside python.exe,
+#   node_modules, cargo/go bin)                                 -> INFO
+#   any unsigned binary (.exe .dll .scr .com .pif .hta) elsewhere -> RED
+#   only scripts, or only signed-by-unknown-publisher files      -> YELLOW
+# A lone dropper in AppData\Roaming\SomeName still surfaces as its own RED line.
+$SCRIPT_EXTS = @(".ps1", ".vbs", ".bat", ".cmd", ".wsf", ".wsh")
+foreach ($grp in ($flaggedExes | Group-Object { $_.File.DirectoryName })) {
+    $items    = @($grp.Group | Sort-Object { $_.File.CreationTime } -Descending)
+    $dir      = $grp.Name
+    $unsigned = @($items | Where-Object { $_.Publisher -eq "UNSIGNED" })
+    $binaries = @($unsigned | Where-Object { $SCRIPT_EXTS -notcontains $_.File.Extension.ToLower() })
+    $isDev    = Test-IsDevEnvironmentDir $dir
+    $sev = if ($isDev) { $SEV_INFO } elseif ($binaries.Count -gt 0) { $SEV_RED } else { $SEV_YELLOW }
+    $newest = $items[0].File.CreationTime.ToString('yyyy-MM-dd')
+    if ($items.Count -eq 1) {
+        $f = $items[0]
+        $label = if ($f.Publisher -eq 'UNSIGNED') { 'Unsigned' } else { 'Unknown publisher' }
+        $title = "$label executable in sensitive location: $($f.File.Name)"
+        $detail = "Path: $($f.File.FullName) | Publisher: $($f.Publisher) | Created: $newest"
+    } else {
+        $what  = if ($isDev) { "developer environment" } else { "sensitive location" }
+        $title = "$($items.Count) unsigned or unknown-publisher files in $what`: $dir"
+        $names = ($items | Select-Object -First 8 | ForEach-Object { $_.File.Name }) -join ', '
+        if ($items.Count -gt 8) { $names += ", ... and $($items.Count - 8) more" }
+        $detail = "Folder: $dir | Files: $names | Unsigned binaries: $($binaries.Count) | Newest: $newest"
+    }
+    $normal = if ($isDev) {
+        "Python/Node/Rust package managers install unsigned launchers and libraries by design. Review only if you don't recognize this environment."
+    } else {
+        "Some legitimate software installs helpers or updaters to AppData, and build tools leave numbered copies in Temp. Check the names against software you know."
+    }
+    $allFindings += New-Finding `
+        -Severity $sev `
+        -Title $title `
+        -Detail $detail `
+        -WhyItMatters "Malware frequently installs to AppData/Temp because these locations don't require admin privileges to write to." `
+        -WhyMightBeNormal $normal `
+        -CreatedDate $newest
 }
 
 $exeHtml = if ($suspiciousExes.Count -gt 0) {

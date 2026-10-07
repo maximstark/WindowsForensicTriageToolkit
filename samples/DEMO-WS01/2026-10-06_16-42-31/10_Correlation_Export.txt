@@ -1,0 +1,17 @@
+WINDOWS FORENSIC TRIAGE -- HAND-OFF SUMMARY
+Host: DEMO-WS01   Scan: 2026-10-06 16:42:31   Toolkit: v2.0
+(Synthetic demo data -- not a real machine)
+
+CORRELATED CONCERNS
+  [RED] AnyDesk installed 2026-09-28, Security log cleared the same night (Event 1102), listener on 7070/TCP.
+  [RED] Hidden scheduled task \Microsoft\Windows\UpdateOrchestrator\SyncCheck runs encoded PowerShell as SYSTEM every 15 min.
+  [RED] powershell.exe (PID 7312) held 203.0.113.47:4444 open for the full 5-minute watch.
+
+WARNINGS
+  Unsigned synchelper.exe in AppData\Roaming, started from HKCU Run, talking to 198.51.100.23:443.
+  BitLocker off on C:. LSASS not running as PPL. 37 failed network logons against 'administrator'.
+
+SUGGESTED NEXT STEPS
+  1. Isolate the machine from the network before further collection.
+  2. Confirm with the user/IT whether AnyDesk and SyncHelper were installed intentionally.
+  3. Export the SyncCheck task XML and decode its -enc payload offline.

@@ -1,0 +1,34 @@
+﻿{
+    "version":  "2.0",
+    "scanTime":  "2026-10-06 16:42:31",
+    "module":  "09",
+    "title":  "Forensic Artifacts",
+    "admin":  true,
+    "findings":  [
+                     {
+                         "detail":  "2026-09-28 22:41 by DEMO-WS01\\jdoe",
+                         "whyItMatters":  "Attackers clear the Security log to hide their tracks.",
+                         "whyMightBeNormal":  "Admins occasionally clear logs during troubleshooting.",
+                         "createdDate":  "",
+                         "severity":  "YELLOW",
+                         "title":  "Security Log Cleared (Event 1102)",
+                         "sid":  ""
+                     },
+                     {
+                         "detail":  "SanDisk Ultra USB 3.0 (first 2026-06-11, last 2026-09-28) | Kingston DataTraveler (2026-03-02)",
+                         "whyItMatters":  "Removable media is both an infection and an exfiltration path.",
+                         "whyMightBeNormal":  "",
+                         "createdDate":  "",
+                         "severity":  "INFO",
+                         "title":  "USB Storage Devices Seen",
+                         "sid":  ""
+                     }
+                 ],
+    "summary":  {
+                    "info":  1,
+                    "red":  0,
+                    "green":  0,
+                    "yellow":  1
+                },
+    "hostname":  "DEMO-WS01"
+}

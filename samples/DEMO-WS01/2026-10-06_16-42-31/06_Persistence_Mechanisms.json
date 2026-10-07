@@ -1,0 +1,43 @@
+﻿{
+    "version":  "2.0",
+    "scanTime":  "2026-10-06 16:42:31",
+    "module":  "06",
+    "title":  "Persistence Mechanisms",
+    "admin":  true,
+    "findings":  [
+                     {
+                         "detail":  "Key: HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run | Value: \"C:\\Users\\jdoe\\AppData\\Roaming\\SyncHelper\\synchelper.exe\" --tray | Publisher: UNSIGNED",
+                         "whyItMatters":  "Startup entries from unknown publishers deserve verification.",
+                         "whyMightBeNormal":  "Smaller legitimate software vendors may not have widely recognized publisher names.",
+                         "createdDate":  "2026-09-29",
+                         "severity":  "YELLOW",
+                         "title":  "Unknown Publisher in Run Key: SyncHelper",
+                         "sid":  ""
+                     },
+                     {
+                         "detail":  "root\\subscription has no __EventFilter / consumer bindings",
+                         "whyItMatters":  "WMI subscriptions are a stealthy, fileless persistence method.",
+                         "whyMightBeNormal":  "",
+                         "createdDate":  "",
+                         "severity":  "GREEN",
+                         "title":  "No WMI Event Subscriptions",
+                         "sid":  ""
+                     },
+                     {
+                         "detail":  "Action: powershell.exe -w hidden -enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkA... | Runs as: SYSTEM | Trigger: every 15 minutes",
+                         "whyItMatters":  "A hidden, encoded PowerShell task masquerading under a Microsoft folder is a common persistence technique.",
+                         "whyMightBeNormal":  "Some management agents use encoded commands, but rarely under a Microsoft task path.",
+                         "createdDate":  "2026-10-04",
+                         "severity":  "RED",
+                         "title":  "Scheduled Task Runs Encoded PowerShell: \\Microsoft\\Windows\\UpdateOrchestrator\\SyncCheck",
+                         "sid":  ""
+                     }
+                 ],
+    "summary":  {
+                    "info":  0,
+                    "red":  1,
+                    "green":  1,
+                    "yellow":  1
+                },
+    "hostname":  "DEMO-WS01"
+}

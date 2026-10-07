@@ -35,6 +35,12 @@ $HOSTNAME     = $env:COMPUTERNAME
 $POLL_INTERVAL_SECONDS = 30
 $POLL_COUNT            = 10   # 10 polls x 30s = 5 minutes total
 
+# v2.0: the launcher can shorten or lengthen the watch (TRIAGE_NET_MINUTES, 1-30)
+$netMinutes = 0
+if ([int]::TryParse("$env:TRIAGE_NET_MINUTES", [ref]$netMinutes) -and $netMinutes -ge 1 -and $netMinutes -le 30) {
+    $POLL_COUNT = [int]($netMinutes * 60 / $POLL_INTERVAL_SECONDS)
+}
+
 Write-Host ""
 Write-Host "============================================"
 Write-Host " Module 08 -- Network Time Series"

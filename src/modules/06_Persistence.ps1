@@ -59,32 +59,6 @@ $runKeyPaths = @(
     "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
 )
 
-# Task 2: Safe Windows exe names that are expected in Winlogon and should never be flagged
-$WINLOGON_SAFE_EXES = @(
-    'userinit.exe', 'explorer.exe', 'sihost.exe', 'ShellAppRuntime.exe',
-    'winlogon.exe', 'wininit.exe', 'csrss.exe', 'lsass.exe', 'services.exe'
-)
-
-function Test-IsSafeWinlogonValue {
-    param([string]$Value)
-    $systemDirs = @(
-        [Environment]::ExpandEnvironmentVariables('%SystemRoot%').TrimEnd('\'),
-        [Environment]::ExpandEnvironmentVariables('%SystemRoot%\System32').TrimEnd('\'),
-        [Environment]::ExpandEnvironmentVariables('%SystemRoot%\SysWOW64').TrimEnd('\')
-    )
-    $entries = @($Value -split ',' | ForEach-Object { $_.Trim().Trim('"') } | Where-Object { $_ })
-    if ($entries.Count -eq 0) { return $false }
-    foreach ($entry in $entries) {
-        $exe  = ($entry -split '\s+')[0]
-        $exe  = [Environment]::ExpandEnvironmentVariables($exe)
-        $leaf = Split-Path $exe -Leaf
-        if ($WINLOGON_SAFE_EXES -notcontains $leaf) { return $false }
-        $dir = Split-Path $exe -Parent
-        if ($dir -and ($systemDirs -notcontains $dir.TrimEnd('\'))) { return $false }
-    }
-    return $true
-}
-
 $runEntries = @()
 foreach ($regPath in $runKeyPaths) {
     try {
@@ -355,8 +329,18 @@ try {
             -Headers @("Type","Name","Query/Command","Namespace") `
             -Properties @("Type","Name","Query","Namespace")
 
-        $allFindings += New-Finding -Severity $SEV_RED `
-            -Title "WMI Event Subscriptions Found ($($filters.Count) filter(s), $($consumers.Count) consumer(s))" `
+        # v2.0: Windows ships one subscription pair by default ("SCM Event Log
+        # Filter" -> "SCM Event Log Consumer"). It is only benign if the consumer
+        # really is an NTEventLogEventConsumer, which can write event-log entries
+        # and nothing else -- a lookalike name on a CommandLine/ActiveScript
+        # consumer is still flagged.
+        $benignFilters   = @("SCM Event Log Filter")
+        $benignConsumers = @("SCM Event Log Consumer")
+        $allBenign = (@($filters | Where-Object { $benignFilters -notcontains $_.Name }).Count -eq 0) -and
+                     (@($consumers | Where-Object { $benignConsumers -notcontains $_.Name -or $_.CimClass.CimClassName -ne "NTEventLogEventConsumer" }).Count -eq 0)
+        $wmiSev = if ($allBenign) { $SEV_INFO } else { $SEV_RED }
+        $allFindings += New-Finding -Severity $wmiSev `
+            -Title "$(if ($allBenign) { 'Only the default Windows WMI subscription is present' } else { "WMI Event Subscriptions Found ($($filters.Count) filter(s), $($consumers.Count) consumer(s))" })" `
             -Detail "Filters: $(($filters | Select-Object -ExpandProperty Name) -join ', ') | Consumers: $(($consumers | Select-Object -ExpandProperty Name) -join ', ')" `
             -WhyItMatters "WMI subscriptions execute code in response to system events and survive reboots. This technique is used by APT groups and sophisticated malware because it is invisible to most AV scans." `
             -WhyMightBeNormal "Extremely rare on home machines. Enterprise management software (SCCM, etc.) uses WMI subscriptions legitimately."

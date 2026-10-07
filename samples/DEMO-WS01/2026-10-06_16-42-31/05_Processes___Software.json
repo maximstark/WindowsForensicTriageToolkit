@@ -1,0 +1,43 @@
+﻿{
+    "version":  "2.0",
+    "scanTime":  "2026-10-06 16:42:31",
+    "module":  "05",
+    "title":  "Processes \u0026 Software",
+    "admin":  true,
+    "findings":  [
+                     {
+                         "detail":  "Publisher: AnyDesk Software GmbH | Version: 9.0.4 | Installed: 2026-09-28",
+                         "whyItMatters":  "This software is commonly used for remote access. If the user did not install it, it may be a backdoor.",
+                         "whyMightBeNormal":  "User or IT support may have installed this legitimately for remote assistance.",
+                         "createdDate":  "",
+                         "severity":  "RED",
+                         "title":  "Known Remote Access Tool Installed: AnyDesk",
+                         "sid":  ""
+                     },
+                     {
+                         "detail":  "Install date: 2026-09-29 | Publisher: (none)",
+                         "whyItMatters":  "Software installed in the last 30 days should be verified against what the user intentionally installed.",
+                         "whyMightBeNormal":  "Windows Update, driver installs, and user-installed software all appear here.",
+                         "createdDate":  "",
+                         "severity":  "YELLOW",
+                         "title":  "Recently Installed Software: SyncHelper",
+                         "sid":  ""
+                     },
+                     {
+                         "detail":  "Office, browsers and PDF readers have no shell or script-host children",
+                         "whyItMatters":  "Office spawning PowerShell is a classic macro-malware signature.",
+                         "whyMightBeNormal":  "",
+                         "createdDate":  "",
+                         "severity":  "GREEN",
+                         "title":  "No Suspicious Parent-Child Process Relationships",
+                         "sid":  ""
+                     }
+                 ],
+    "summary":  {
+                    "info":  0,
+                    "red":  1,
+                    "green":  1,
+                    "yellow":  1
+                },
+    "hostname":  "DEMO-WS01"
+}

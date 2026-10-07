@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>[05] Processes & Software -- DEMO-WS01</title>
+<style>
+  :root {
+    --bg:        #0f1117;
+    --surface:   #1a1d27;
+    --border:    #2a2d3a;
+    --text:      #e2e8f0;
+    --muted:     #64748b;
+    --green:     #22c55e;
+    --green-bg:  #052e16;
+    --yellow:    #eab308;
+    --yellow-bg: #1c1a05;
+    --red:       #ef4444;
+    --red-bg:    #2d0a0a;
+    --blue:      #3b82f6;
+    --blue-bg:   #0a1628;
+    --mono:      'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px; line-height: 1.6; padding: 2rem;
+  }
+  .header { border-bottom: 1px solid var(--border); padding-bottom: 1.5rem; margin-bottom: 2rem; }
+  .header h1 { font-size: 1.6rem; font-weight: 700; color: var(--text); }
+  .header .module-num { color: var(--blue); font-size: 0.85rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 0.3rem; }
+  .meta { display: flex; gap: 2rem; margin-top: 0.8rem; flex-wrap: wrap; }
+  .meta-item { font-size: 0.8rem; color: var(--muted); }
+  .meta-item span { color: var(--text); font-weight: 500; }
+  .summary-bar { display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }
+  .pill { padding: 0.4rem 1rem; border-radius: 999px; font-size: 0.82rem; font-weight: 600; }
+  .pill-red    { background: var(--red-bg);    color: var(--red);    border: 1px solid var(--red); }
+  .pill-yellow { background: var(--yellow-bg); color: var(--yellow); border: 1px solid var(--yellow); }
+  .pill-green  { background: var(--green-bg);  color: var(--green);  border: 1px solid var(--green); }
+  .pill-info   { background: var(--blue-bg);   color: var(--blue);   border: 1px solid var(--blue); }
+  .section { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 1.5rem; overflow: hidden; }
+  .section-header { padding: 0.9rem 1.2rem; background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border); cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none; }
+  .section-header:hover { background: rgba(255,255,255,0.05); }
+  .section-title { font-weight: 600; font-size: 0.95rem; }
+  .section-body { padding: 1.2rem; }
+  .toggle-icon { color: var(--muted); font-size: 0.8rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  th { text-align: left; padding: 0.5rem 0.8rem; color: var(--muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); }
+  td { padding: 0.5rem 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: top; word-break: break-word; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  .mono { font-family: var(--mono); font-size: 0.8rem; }
+  .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; }
+  .badge-red    { background: var(--red-bg);    color: var(--red); }
+  .badge-yellow { background: var(--yellow-bg); color: var(--yellow); }
+  .badge-green  { background: var(--green-bg);  color: var(--green); }
+  .badge-info   { background: var(--blue-bg);   color: var(--blue); }
+  .finding { border-radius: 6px; padding: 0.8rem 1rem; margin-bottom: 0.8rem; border-left: 3px solid; }
+  .finding-red    { background: var(--red-bg);    border-color: var(--red); }
+  .finding-yellow { background: var(--yellow-bg); border-color: var(--yellow); }
+  .finding-green  { background: var(--green-bg);  border-color: var(--green); }
+  .finding-info   { background: var(--blue-bg);   border-color: var(--blue); }
+  .finding-title  { font-weight: 600; margin-bottom: 0.3rem; }
+  .finding-detail { font-size: 0.82rem; color: var(--text); margin-bottom: 0.4rem; }
+  .finding-why    { font-size: 0.78rem; color: var(--muted); }
+  .finding-normal { font-size: 0.75rem; color: var(--muted); font-style: italic; margin-top: 0.3rem; }
+  .no-findings { color: var(--muted); font-size: 0.85rem; font-style: italic; }
+  code { background: rgba(255,255,255,0.06); padding: 0.1rem 0.4rem; border-radius: 3px; font-family: var(--mono); font-size: 0.8rem; }
+  .footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.75rem; color: var(--muted); text-align: center; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="module-num">Module 05</div>
+  <h1>Processes & Software</h1>
+  <div class="meta">
+    <div class="meta-item">Host: <span>DEMO-WS01</span></div>
+    <div class="meta-item">Scan time: <span>2026-09-30 09:14:05</span></div>
+    <div class="meta-item">Toolkit: <span>v2.0</span></div>
+    <div class="meta-item">User: <span>analyst</span></div>
+    <div class="meta-item">Admin: <span>Yes</span></div>
+  </div>
+</div><div class="summary-bar">
+  <span class='pill pill-red'>1 Critical</span>
+  <span class='pill pill-yellow'>1 Warning</span>
+  <span class='pill pill-green'>1 Clean</span>
+  
+  
+</div><div class="section">
+  <div class="section-header">
+    <span class="section-title">Findings & Flags</span>
+    <span class="toggle-icon">[^]</span>
+  </div>
+  <div class="section-body" style="display:block">
+    <div class="finding finding-red">
+  <div class="finding-title"><span class='badge badge-red'>RED</span> Known Remote Access Tool Installed: AnyDesk</div>
+  <div class="finding-detail">Publisher: AnyDesk Software GmbH | Version: 9.0.4 | Installed: 2026-09-28</div>
+  <div class="finding-why">This software is commonly used for remote access. If the user did not install it, it may be a backdoor.</div>
+  <div class='finding-normal'>[i] May be normal: User or IT support may have installed this legitimately for remote assistance.</div>
+</div><div class="finding finding-yellow">
+  <div class="finding-title"><span class='badge badge-yellow'>YELLOW</span> Recently Installed Software: SyncHelper</div>
+  <div class="finding-detail">Install date: 2026-09-29 | Publisher: (none)</div>
+  <div class="finding-why">Software installed in the last 30 days should be verified against what the user intentionally installed.</div>
+  <div class='finding-normal'>[i] May be normal: Windows Update, driver installs, and user-installed software all appear here.</div>
+</div><div class="finding finding-green">
+  <div class="finding-title"><span class='badge badge-green'>GREEN</span> No Suspicious Parent-Child Process Relationships</div>
+  <div class="finding-detail">Office, browsers and PDF readers have no shell or script-host children</div>
+  <div class="finding-why">Office spawning PowerShell is a classic macro-malware signature.</div>
+  
+</div>
+  </div>
+</div><p class='no-findings' style='margin-top:1rem'>Synthetic demo data generated by tools\New-DemoScan.ps1 -- not a real machine.</p><div class="footer">
+  Windows Forensic Triage Toolkit v2.0 -- Read-only forensic tool -- No system changes made
+</div>
+<script>
+  document.querySelectorAll('.section-header').forEach(h => {
+    h.addEventListener('click', () => {
+      const body = h.nextElementSibling;
+      const icon = h.querySelector('.toggle-icon');
+      if (body.style.display === 'none') {
+        body.style.display = 'block';
+        icon.textContent = '[^]';
+      } else {
+        body.style.display = 'none';
+        icon.textContent = '[v]';
+      }
+    });
+  });
+</script>
+</body>
+</html>
