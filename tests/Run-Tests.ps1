@@ -96,6 +96,27 @@ Test "developer environments are recognized; ordinary AppData folders are not" {
     Assert (-not (Test-IsDevEnvironmentDir "C:\Users\a\AppData\Roaming\inventory")) "'venv' must match a whole folder name"
 }
 
+Test "file walk does not loop through self-referencing junctions" {
+    $root = Join-Path $tmp "walk"
+    New-Item -ItemType Directory -Path (Join-Path $root "sub") -Force | Out-Null
+    Set-Content (Join-Path $root "a.exe") "x"
+    Set-Content (Join-Path $root "sub\b.exe") "x"
+    Set-Content (Join-Path $root "sub\c.txt") "x"
+    # Like LOCALAPPDATA\Application Data -> LOCALAPPDATA
+    New-Item -ItemType Junction -Path (Join-Path $root "Application Data") -Target $root | Out-Null
+    $found = @(Get-ChildFilesSafe -Path $root -Include "*.exe")
+    Assert ($found.Count -eq 2) "expected 2 files, got $($found.Count): $($found.FullName -join ', ')"
+    cmd /c rmdir (Join-Path $root "Application Data") | Out-Null   # remove the junction, not its target
+}
+
+Test "8.3 short paths expand to the long form (TEMP de-duplication)" {
+    $long = Join-Path $tmp "a very long directory name for short names"
+    New-Item -ItemType Directory -Path $long -Force | Out-Null
+    $short = (New-Object -ComObject Scripting.FileSystemObject).GetFolder($long).ShortPath
+    if ($short -eq $long) { Write-Host "         (8.3 names disabled on this volume; checking passthrough only)" -ForegroundColor DarkGray }
+    Assert ((ConvertTo-LongPath $short) -eq $long) "expected $long, got $(ConvertTo-LongPath $short)"
+}
+
 Test "every script is pure ASCII (PS 5.1 reads BOM-less UTF-8 as ANSI)" {
     $files = @(Get-ChildItem (Join-Path $Root "src") -Recurse -Filter *.ps1)
     foreach ($f in $files) {

@@ -172,15 +172,13 @@ $scanPaths = @(
     "C:\ProgramData",
     $env:PUBLIC
 ) | Where-Object { $_ -and (Test-Path $_ -ErrorAction SilentlyContinue) } |
-    ForEach-Object { (Resolve-Path $_ -ErrorAction SilentlyContinue).ProviderPath.TrimEnd('\') } |
+    ForEach-Object { (ConvertTo-LongPath (Resolve-Path $_ -ErrorAction SilentlyContinue).ProviderPath).TrimEnd('\') } |
     Sort-Object -Unique
 
 foreach ($path in $scanPaths) {
     if (Test-Path $path -ErrorAction SilentlyContinue) {
-        $exes = Get-ChildItem -Path $path -Include $EXECUTABLE_EXTENSIONS `
-                              -Recurse -Force -ErrorAction SilentlyContinue |
+        $exes = Get-ChildFilesSafe -Path $path -Include $EXECUTABLE_EXTENSIONS |
                 Where-Object {
-                    -not $_.PSIsContainer -and
                     # v1.5: Skip files in whitelisted Microsoft/browser AppData paths
                     -not (Test-IsWhitelistedPath -FilePath $_.FullName)
                 } |
@@ -218,15 +216,39 @@ foreach ($path in $scanPaths) {
 #   only scripts, or only signed-by-unknown-publisher files      -> YELLOW
 # A lone dropper in AppData\Roaming\SomeName still surfaces as its own RED line.
 $SCRIPT_EXTS = @(".ps1", ".vbs", ".bat", ".cmd", ".wsf", ".wsh")
+
+# Buckets: one per folder; then lone files that share a name family (digit runs
+# folded, e.g. uv-trampoline-32924.exe in five random .tmpXXXX folders) merge
+# into one bucket so they read as one finding.
+$buckets = @()
+$singles = @()
 foreach ($grp in ($flaggedExes | Group-Object { $_.File.DirectoryName })) {
-    $items    = @($grp.Group | Sort-Object { $_.File.CreationTime } -Descending)
-    $dir      = $grp.Name
+    if ($grp.Count -eq 1) { $singles += $grp.Group[0] }
+    else { $buckets += [PSCustomObject]@{ Dir = $grp.Name; Items = @($grp.Group); Family = $null } }
+}
+foreach ($fam in ($singles | Group-Object { ($_.File.Name.ToLower() -replace '\d+', '#') + '|' + $_.Publisher })) {
+    if ($fam.Count -eq 1) {
+        $buckets += [PSCustomObject]@{ Dir = $fam.Group[0].File.DirectoryName; Items = @($fam.Group); Family = $null }
+    } else {
+        $buckets += [PSCustomObject]@{ Dir = $null; Items = @($fam.Group); Family = ($fam.Group[0].File.Name -replace '\d+', '#') }
+    }
+}
+
+foreach ($bucket in $buckets) {
+    $items    = @($bucket.Items | Sort-Object { $_.File.CreationTime } -Descending)
+    $dir      = if ($bucket.Dir) { $bucket.Dir } else { $items[0].File.DirectoryName }
     $unsigned = @($items | Where-Object { $_.Publisher -eq "UNSIGNED" })
     $binaries = @($unsigned | Where-Object { $SCRIPT_EXTS -notcontains $_.File.Extension.ToLower() })
     $isDev    = Test-IsDevEnvironmentDir $dir
     $sev = if ($isDev) { $SEV_INFO } elseif ($binaries.Count -gt 0) { $SEV_RED } else { $SEV_YELLOW }
     $newest = $items[0].File.CreationTime.ToString('yyyy-MM-dd')
-    if ($items.Count -eq 1) {
+    if ($bucket.Family) {
+        $label  = if ($items[0].Publisher -eq 'UNSIGNED') { 'Unsigned' } else { 'Unknown publisher' }
+        $title  = "$label executable in sensitive location: $($bucket.Family) ($($items.Count) copies)"
+        $paths  = ($items | Select-Object -First 5 | ForEach-Object { $_.File.FullName }) -join ' ; '
+        if ($items.Count -gt 5) { $paths += " ; ... and $($items.Count - 5) more" }
+        $detail = "Paths: $paths | Publisher: $($items[0].Publisher) | Newest: $newest"
+    } elseif ($items.Count -eq 1) {
         $f = $items[0]
         $label = if ($f.Publisher -eq 'UNSIGNED') { 'Unsigned' } else { 'Unknown publisher' }
         $title = "$label executable in sensitive location: $($f.File.Name)"
@@ -275,8 +297,8 @@ $recentExes = @()
 
 foreach ($root in $scanRoots) {
     if (Test-Path $root -ErrorAction SilentlyContinue) {
-        $found = Get-ChildItem -Path $root -Include "*.exe" -Recurse -Force -ErrorAction SilentlyContinue |
-                 Where-Object { $_.CreationTime -gt $cutoff -and -not $_.PSIsContainer } |
+        $found = Get-ChildFilesSafe -Path $root -Include "*.exe" |
+                 Where-Object { $_.CreationTime -gt $cutoff } |
                  Select-Object -First 50
 
         foreach ($f in $found) {

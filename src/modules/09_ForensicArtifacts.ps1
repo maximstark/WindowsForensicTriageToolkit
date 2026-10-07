@@ -367,8 +367,8 @@ $sensitiveLocations = @(
 
 foreach ($loc in $sensitiveLocations) {
     if (Test-Path $loc -ErrorAction SilentlyContinue) {
-        $files = Get-ChildItem -Path $loc -Recurse -Force -ErrorAction SilentlyContinue |
-                 Where-Object { -not $_.PSIsContainer -and $_.LastWriteTime -gt $cutoff7Days } |
+        $files = Get-ChildFilesSafe -Path $loc |
+                 Where-Object { $_.LastWriteTime -gt $cutoff7Days } |
                  Select-Object -First 30
 
         foreach ($f in $files) {
@@ -406,12 +406,16 @@ Write-Host "[*] Checking temp directories for archive files..."
 
 $archiveExts = @("*.zip","*.rar","*.7z","*.tar","*.gz","*.cab")
 $archives    = @()
-$tempPaths   = @($env:TEMP, "$env:LOCALAPPDATA\Temp", "C:\Windows\Temp")
+# v2.0: expand 8.3 names and de-duplicate -- TEMP is usually LOCALAPPDATA\Temp
+$tempPaths   = @($env:TEMP, "$env:LOCALAPPDATA\Temp", "C:\Windows\Temp") |
+               Where-Object { Test-Path $_ -ErrorAction SilentlyContinue } |
+               ForEach-Object { (ConvertTo-LongPath (Resolve-Path $_).ProviderPath).TrimEnd('\') } |
+               Sort-Object -Unique
 
 foreach ($tempPath in $tempPaths) {
     if (Test-Path $tempPath -ErrorAction SilentlyContinue) {
         foreach ($ext in $archiveExts) {
-            $found = Get-ChildItem -Path $tempPath -Filter $ext -Recurse -Force -ErrorAction SilentlyContinue |
+            $found = Get-ChildFilesSafe -Path $tempPath -Include $ext |
                      Select-Object -First 20
             foreach ($f in $found) {
                 $archives += [PSCustomObject]@{

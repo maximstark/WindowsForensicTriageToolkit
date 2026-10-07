@@ -186,6 +186,53 @@ function Get-SafeEventLog {
     } catch { return @() }
 }
 
+# --- LONG PATH NAMES (v2.0) --------------------------------------------------
+# %TEMP% is often an 8.3 short path (C:\Users\JOHNSM~1\...). Resolve-Path does
+# not expand those, so the same folder could be scanned and reported twice.
+function ConvertTo-LongPath {
+    param([string]$Path)
+    try {
+        if (-not ("TriageNative.PathApi" -as [type])) {
+            Add-Type -Namespace TriageNative -Name PathApi -MemberDefinition @"
+[System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+public static extern uint GetLongPathName(string shortPath, System.Text.StringBuilder longPath, uint size);
+"@ -ErrorAction Stop
+        }
+        $sb = New-Object System.Text.StringBuilder 1024
+        if ([TriageNative.PathApi]::GetLongPathName($Path, $sb, 1024) -gt 0) { return $sb.ToString() }
+    } catch { }
+    return $Path
+}
+
+# --- SAFE RECURSIVE FILE WALK (v2.0) -----------------------------------------
+# Get-ChildItem -Recurse -Force follows the legacy "Application Data" junctions,
+# which point back at their own parent (LOCALAPPDATA\Application Data -> LOCALAPPDATA,
+# ProgramData\Application Data -> ProgramData). The walk then loops until the path
+# limit, reporting every file dozens of times and eating any -First N cap.
+# This walker never descends into reparse points (junctions, symlinks, mount
+# points) and streams results, so a downstream Select-Object -First stops it early.
+function Get-ChildFilesSafe {
+    param(
+        [string]$Path,
+        [string[]]$Include = @("*")
+    )
+    if (-not (Test-Path -LiteralPath $Path -ErrorAction SilentlyContinue)) { return }
+    $queue = New-Object System.Collections.Generic.Queue[string]
+    $queue.Enqueue($Path)
+    while ($queue.Count -gt 0) {
+        $dir = $queue.Dequeue()
+        foreach ($item in @(Get-ChildItem -LiteralPath $dir -Force -ErrorAction SilentlyContinue)) {
+            if ($item.PSIsContainer) {
+                if (-not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { $queue.Enqueue($item.FullName) }
+                continue
+            }
+            foreach ($pattern in $Include) {
+                if ($item.Name -like $pattern) { $item; break }
+            }
+        }
+    }
+}
+
 # --- PUBLISHER VERIFICATION ---------------------------------------------------
 
 function Get-FilePublisher {
