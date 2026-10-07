@@ -27,7 +27,7 @@
 - Fixed: `00_LAUNCHER.bat` spread modules across separate folders and skipped module 10.
 - Fixed: the file walks in modules 02 and 09 followed the legacy `Application Data` junctions, which point back at their own parent. Every file under `%LOCALAPPDATA%` and `ProgramData` was reported over and over (`…\Application Data\Application Data\…`), and the duplicates used up the per-folder cap so real files went unchecked. A new `Get-ChildFilesSafe` never enters reparse points.
 - False-positive pass across modules 02, 05, 06, 07, 09 and 10.
-- **Noise reduction from a real developer workstation scan.** The same scan went from 124 critical findings to the handful that deserved it:
+- **Noise reduction from a real developer workstation scan.** The same machine went from 124 critical findings to 11, each one a real thing to look at:
   - Module 02 reports one finding per executable *family*, so dozens of numbered build-tool copies in Temp are one line, and it no longer scans `%TEMP%` twice when it equals `%LOCALAPPDATA%\Temp`.
   - Module 05 reports one finding per executable with its PIDs, not one per process. Unsigned-with-network is a warning, and the known-unsigned toolchain paths are skipped. Browser → `cmd.exe` (native-messaging hosts) is a warning; Office and PDF readers spawning shells stay critical.
   - Module 06 recognizes Windows' default `SCM Event Log` WMI subscription, but only when its consumer really is the log-only `NTEventLogEventConsumer`.

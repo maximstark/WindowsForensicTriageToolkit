@@ -10,13 +10,16 @@
 # baseline lacks, so "new since last scan" has something to show.
 # =============================================================================
 
+param([string]$OutRoot = "")
+
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 $env:USERNAME = "analyst"           # Get-HtmlHeader prints the user; keep the real one out
 . (Join-Path $Root "src\lib\Common.ps1") | Out-Null
 
 $HostName = "DEMO-WS01"
-$Out      = Join-Path $Root "samples\$HostName"
+if (-not $OutRoot) { $OutRoot = Join-Path $Root "samples" }
+$Out      = Join-Path $OutRoot $HostName
 if (Test-Path $Out) { Remove-Item $Out -Recurse -Force }
 
 function F($sev, $title, $detail, $why, $normal = "", $created = "") {

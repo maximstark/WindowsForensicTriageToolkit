@@ -142,8 +142,9 @@ if (-not $LibOnly) {
 
     if (Test-Path $exe) {
         Test "demo scan renders every page without crashing" {
-            & (Join-Path $Root "tools\New-DemoScan.ps1") 6>$null | Out-Null
-            $demo = Join-Path $Root "samples\DEMO-WS01"
+            # generated into the temp dir so test runs never churn the committed samples
+            & (Join-Path $Root "tools\New-DemoScan.ps1") -OutRoot (Join-Path $tmp "samples") 6>$null | Out-Null
+            $demo = Join-Path $tmp "samples\DEMO-WS01"
             $scans = @(Get-ChildItem $demo -Directory | Sort-Object Name)
             $shots = Join-Path $tmp "shots"
             $p = Start-Process $exe -ArgumentList @("--render-docs", "`"$shots`"", "--scan", "`"$($scans[-1].FullName)`"", "--baseline", "`"$($scans[0].FullName)`"") -PassThru
@@ -156,7 +157,7 @@ if (-not $LibOnly) {
         }
 
         Test "summary page and manifest are written and verify" {
-            $scan = @(Get-ChildItem (Join-Path $Root "samples\DEMO-WS01") -Directory | Sort-Object Name)[-1].FullName
+            $scan = @(Get-ChildItem (Join-Path $tmp "samples\DEMO-WS01") -Directory | Sort-Object Name)[-1].FullName
             $summary = Get-Content (Join-Path $scan "00_Summary.html") -Raw
             Assert ($summary -match "4 critical findings need attention") "verdict missing from 00_Summary.html"
             $m = Get-Content (Join-Path $scan "manifest.json") -Raw | ConvertFrom-Json
