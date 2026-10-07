@@ -1,0 +1,34 @@
+﻿{
+    "version":  "2.0",
+    "scanTime":  "2026-09-30 09:14:05",
+    "module":  "01",
+    "title":  "System Identity",
+    "admin":  true,
+    "findings":  [
+                     {
+                         "detail":  "Installed 2025-11-03 | Last boot 2026-10-06 08:12 | Time zone: Eastern Standard Time",
+                         "whyItMatters":  "Baseline context for every other finding.",
+                         "whyMightBeNormal":  "",
+                         "createdDate":  "",
+                         "severity":  "INFO",
+                         "title":  "Operating System: Windows 11 Pro 24H2 (build 26100)",
+                         "sid":  ""
+                     },
+                     {
+                         "detail":  "Manufacturer: Contoso Systems | Model: CS-14 G7 | BIOS 1.22.0 (2026-04-18)",
+                         "whyItMatters":  "Modern UEFI firmware supports Secure Boot and measured boot.",
+                         "whyMightBeNormal":  "",
+                         "createdDate":  "",
+                         "severity":  "GREEN",
+                         "title":  "Secure Boot capable firmware (UEFI)",
+                         "sid":  ""
+                     }
+                 ],
+    "summary":  {
+                    "info":  1,
+                    "red":  0,
+                    "green":  1,
+                    "yellow":  0
+                },
+    "hostname":  "DEMO-WS01"
+}

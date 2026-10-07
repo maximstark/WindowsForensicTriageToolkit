@@ -1,0 +1,842 @@
+<!--
+  MainWindow.xaml - layout for the Triage Toolkit window. Loaded at runtime by
+  MainWindow.cs (XamlReader), which wires the named elements by x:Name.
+  DataContext is MainViewModel (ViewModels.cs).
+-->
+<Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Background="{StaticResource Bg}"
+      TextElement.FontFamily="{StaticResource UiFont}"
+      TextElement.FontSize="13"
+      TextElement.Foreground="{StaticResource Text}"
+      TextOptions.TextFormattingMode="Display"
+      UseLayoutRounding="True" SnapsToDevicePixels="True">
+
+  <Grid.Resources>
+    <BooleanToVisibilityConverter x:Key="Vis"/>
+  </Grid.Resources>
+
+  <Grid.ColumnDefinitions>
+    <ColumnDefinition Width="236"/>
+    <ColumnDefinition Width="*"/>
+  </Grid.ColumnDefinitions>
+
+  <!-- ================================================================ RAIL -->
+  <Border Background="{StaticResource Rail}" BorderBrush="{StaticResource Border}" BorderThickness="0,0,1,0">
+    <DockPanel Margin="16,22,16,16">
+      <!-- Brand -->
+      <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6,0,0,28">
+        <Viewbox Width="34" Height="34">
+          <Canvas Width="24" Height="24">
+            <Path Data="M12,1.6 L20.6,4.8 V11.2 C20.6,16.6 17,20.9 12,22.4 C7,20.9 3.4,16.6 3.4,11.2 V4.8 Z"
+                  Fill="#162033" Stroke="{StaticResource Accent}" StrokeThickness="1.4" StrokeLineJoin="Round"/>
+            <Ellipse Canvas.Left="10.1" Canvas.Top="5.6" Width="3.8" Height="3.8" Fill="{StaticResource Red}"/>
+            <Ellipse Canvas.Left="10.1" Canvas.Top="10.3" Width="3.8" Height="3.8" Fill="{StaticResource Yellow}"/>
+            <Ellipse Canvas.Left="10.1" Canvas.Top="15.0" Width="3.8" Height="3.8" Fill="{StaticResource Green}"/>
+          </Canvas>
+        </Viewbox>
+        <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+          <TextBlock Text="Triage Toolkit" FontFamily="{StaticResource DisplayFont}" FontSize="16" FontWeight="SemiBold"/>
+          <TextBlock Text="{Binding Version}" Foreground="{StaticResource Subtle}" FontSize="11"/>
+        </StackPanel>
+      </StackPanel>
+
+      <!-- Host card -->
+      <Border DockPanel.Dock="Bottom" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1"
+              CornerRadius="9" Padding="14,12">
+        <StackPanel>
+          <TextBlock Text="THIS MACHINE" Style="{StaticResource Caption}"/>
+          <TextBlock Text="{Binding MachineName}" FontWeight="SemiBold" FontSize="14" Margin="0,4,0,8" TextTrimming="CharacterEllipsis"/>
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+            <TextBlock Text="&#xE7EF;" Style="{StaticResource Icon}" FontSize="12" Foreground="{Binding AdminBrush}"/>
+            <TextBlock Text="{Binding AdminText}" Foreground="{StaticResource Muted}" FontSize="12" Margin="8,0,0,0" TextWrapping="Wrap" Width="160"/>
+          </StackPanel>
+          <StackPanel Orientation="Horizontal">
+            <TextBlock x:Name="IntegrityIcon" Text="&#xE72E;" Style="{StaticResource Icon}" FontSize="12" Foreground="{StaticResource Green}"/>
+            <TextBlock Text="{Binding IntegrityText}" Foreground="{StaticResource Muted}" FontSize="12" Margin="8,0,0,0" TextWrapping="Wrap" Width="160"/>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- Nav -->
+      <StackPanel>
+        <RadioButton x:Name="NavScan" Style="{StaticResource NavItem}" GroupName="nav" IsChecked="True" ToolTip="Ctrl+1">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="&#xE9D9;" Style="{StaticResource Icon}"/>
+            <TextBlock Text="Scan" Margin="14,0,0,0"/>
+            <Path x:Name="NavScanSpinner" Style="{StaticResource Spinner}" Width="14" Height="14" Margin="12,0,0,0" StrokeThickness="1.6"
+                  Data="M 7,1 A 6,6 0 1 1 1,7" Visibility="{Binding IsRunning, Converter={StaticResource Vis}}"/>
+          </StackPanel>
+        </RadioButton>
+        <RadioButton x:Name="NavFindings" Style="{StaticResource NavItem}" GroupName="nav" ToolTip="Ctrl+2">
+          <Grid>
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="&#xE7C3;" Style="{StaticResource Icon}"/>
+              <TextBlock Text="Findings" Margin="14,0,0,0"/>
+            </StackPanel>
+            <Border HorizontalAlignment="Right" Background="{StaticResource RedSoft}" CornerRadius="9" Padding="7,1" Margin="0,0,-4,0"
+                    Visibility="{Binding HasScan, Converter={StaticResource Vis}}">
+              <TextBlock Text="{Binding Red}" Foreground="{StaticResource Red}" FontSize="11" FontWeight="SemiBold"/>
+            </Border>
+          </Grid>
+        </RadioButton>
+        <RadioButton x:Name="NavHistory" Style="{StaticResource NavItem}" GroupName="nav" ToolTip="Ctrl+3">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="&#xE81C;" Style="{StaticResource Icon}"/>
+            <TextBlock Text="History" Margin="14,0,0,0"/>
+          </StackPanel>
+        </RadioButton>
+        <RadioButton x:Name="NavExport" Style="{StaticResource NavItem}" GroupName="nav" ToolTip="Ctrl+4">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="&#xEDE1;" Style="{StaticResource Icon}"/>
+            <TextBlock Text="Export" Margin="14,0,0,0"/>
+          </StackPanel>
+        </RadioButton>
+        <RadioButton x:Name="NavAbout" Style="{StaticResource NavItem}" GroupName="nav" ToolTip="Ctrl+5">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="&#xE946;" Style="{StaticResource Icon}"/>
+            <TextBlock Text="About" Margin="14,0,0,0"/>
+          </StackPanel>
+        </RadioButton>
+      </StackPanel>
+    </DockPanel>
+  </Border>
+
+  <!-- ================================================================ PAGES -->
+  <Grid Grid.Column="1">
+
+    <!-- ======================================================= SCAN PAGE -->
+    <ScrollViewer x:Name="PageScan" VerticalScrollBarVisibility="Auto">
+      <Grid Margin="36,30,36,30">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Margin="0,0,0,24">
+          <TextBlock Text="New triage scan" Style="{StaticResource H1}"/>
+          <TextBlock Style="{StaticResource Body}" Margin="0,6,0,0" MaxWidth="720" HorizontalAlignment="Left"
+                     Text="Ten read-only modules inspect this machine for signs of compromise and write a severity-ranked report. Nothing on the system is changed."/>
+        </StackPanel>
+
+        <Grid Grid.Row="1">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="24"/>
+            <ColumnDefinition Width="340"/>
+          </Grid.ColumnDefinitions>
+
+          <!-- Module list -->
+          <Border Style="{StaticResource Card}" Padding="8,16,8,8" VerticalAlignment="Top">
+            <StackPanel>
+              <DockPanel Margin="14,0,10,10">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Visibility="{Binding IsNotRunning, Converter={StaticResource Vis}}">
+                  <Button x:Name="BtnQuick" Style="{StaticResource GhostButton}" Content="Quick (skip network watch)" ToolTip="Deselect module 08, which watches connections for several minutes"/>
+                  <Button x:Name="BtnAll" Style="{StaticResource GhostButton}" Content="Select all"/>
+                </StackPanel>
+                <TextBlock Text="Modules" Style="{StaticResource H2}" VerticalAlignment="Center"/>
+              </DockPanel>
+
+              <ItemsControl ItemsSource="{Binding Modules}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border x:Name="row" CornerRadius="8" Padding="14,10" Background="Transparent">
+                      <Grid>
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="52"/>
+                          <ColumnDefinition Width="34"/>
+                          <ColumnDefinition Width="*"/>
+                          <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding IsSelected}" IsEnabled="{Binding CanToggle}"
+                                  VerticalAlignment="Center" AutomationProperties.Name="{Binding Name}"/>
+                        <TextBlock Grid.Column="1" Text="{Binding Number}" FontFamily="{StaticResource MonoFont}" Foreground="{StaticResource Subtle}"
+                                   VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="0,0,16,0">
+                          <TextBlock x:Name="name" Text="{Binding Name}" FontWeight="SemiBold" FontSize="14"/>
+                          <TextBlock Text="{Binding Description}" Foreground="{StaticResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <Grid Grid.Column="3" VerticalAlignment="Center" MinWidth="110">
+                          <TextBlock Text="{Binding EstimateText}" Foreground="{StaticResource Subtle}" HorizontalAlignment="Right"
+                                     Visibility="{Binding IsIdle, Converter={StaticResource Vis}}"/>
+                          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Visibility="{Binding IsRunning, Converter={StaticResource Vis}}">
+                            <TextBlock Text="{Binding ElapsedText}" Foreground="{StaticResource Accent}" FontFamily="{StaticResource MonoFont}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                            <Path Style="{StaticResource Spinner}"/>
+                          </StackPanel>
+                          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Visibility="{Binding HasResult, Converter={StaticResource Vis}}">
+                            <TextBlock Text="{Binding ElapsedText}" Foreground="{StaticResource Subtle}" FontFamily="{StaticResource MonoFont}" FontSize="12" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                            <Border Background="{Binding ResultSoft}" CornerRadius="10" Padding="9,2">
+                              <TextBlock Text="{Binding ResultText}" Foreground="{Binding ResultBrush}" FontSize="12" FontWeight="SemiBold"/>
+                            </Border>
+                          </StackPanel>
+                          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Visibility="{Binding HasProblem, Converter={StaticResource Vis}}">
+                            <TextBlock Text="{Binding ProblemText}" Foreground="{Binding StateBrush}" FontSize="12" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding StateIcon}" Style="{StaticResource Icon}" FontSize="13" Foreground="{Binding StateBrush}"/>
+                          </StackPanel>
+                        </Grid>
+                      </Grid>
+                    </Border>
+                    <DataTemplate.Triggers>
+                      <Trigger SourceName="row" Property="IsMouseOver" Value="True">
+                        <Setter TargetName="row" Property="Background" Value="{StaticResource Hover}"/>
+                      </Trigger>
+                      <DataTrigger Binding="{Binding IsRunning}" Value="True">
+                        <Setter TargetName="row" Property="Background" Value="{StaticResource AccentSoft}"/>
+                      </DataTrigger>
+                      <DataTrigger Binding="{Binding IsSelected}" Value="False">
+                        <Setter TargetName="name" Property="Foreground" Value="{StaticResource Muted}"/>
+                      </DataTrigger>
+                    </DataTemplate.Triggers>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
+
+          <!-- Right column -->
+          <StackPanel Grid.Column="2">
+
+            <!-- Setup -->
+            <Border Style="{StaticResource Card}" Visibility="{Binding ShowSetup, Converter={StaticResource Vis}}">
+              <StackPanel>
+                <TextBlock Text="NETWORK WATCH" Style="{StaticResource Caption}"/>
+                <TextBlock Style="{StaticResource Body}" FontSize="12" Margin="0,4,0,10"
+                           Text="How long module 08 samples live connections. Longer catches slower beacons."/>
+                <Border Background="{StaticResource Bg}" CornerRadius="8" Padding="3" BorderBrush="{StaticResource Border}" BorderThickness="1">
+                  <UniformGrid Columns="4">
+                    <RadioButton x:Name="Net1" Style="{StaticResource Segment}" GroupName="net" Content="1 min"/>
+                    <RadioButton x:Name="Net2" Style="{StaticResource Segment}" GroupName="net" Content="2 min"/>
+                    <RadioButton x:Name="Net5" Style="{StaticResource Segment}" GroupName="net" Content="5 min"/>
+                    <RadioButton x:Name="Net10" Style="{StaticResource Segment}" GroupName="net" Content="10 min"/>
+                  </UniformGrid>
+                </Border>
+
+                <TextBlock Text="SAVE REPORTS TO" Style="{StaticResource Caption}" Margin="0,22,0,6"/>
+                <Border Background="{StaticResource Bg}" CornerRadius="8" Padding="12,9" BorderBrush="{StaticResource Border}" BorderThickness="1">
+                  <TextBlock Text="{Binding OutputRoot}" FontFamily="{StaticResource MonoFont}" FontSize="12" Foreground="{StaticResource Muted}"
+                             TextTrimming="CharacterEllipsis" ToolTip="{Binding OutputRoot}"/>
+                </Border>
+                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                  <Button x:Name="BtnChangeOut" Style="{StaticResource Button}" Content="Change…"/>
+                  <Button x:Name="BtnOpenOut" Style="{StaticResource GhostButton}" Content="Open folder" Margin="6,0,0,0"/>
+                </StackPanel>
+
+                <Rectangle Height="1" Fill="{StaticResource Border}" Margin="0,22,0,18"/>
+                <TextBlock Text="{Binding EstimateText}" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" Margin="0,0,0,12"/>
+                <Button x:Name="BtnStart" Style="{StaticResource PrimaryButton}" IsEnabled="{Binding CanStart}" HorizontalAlignment="Stretch">
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE768;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,10,0"/>
+                    <TextBlock Text="Start scan"/>
+                  </StackPanel>
+                </Button>
+                <TextBlock Text="Ctrl+Enter" Foreground="{StaticResource Subtle}" FontSize="11" HorizontalAlignment="Center" Margin="0,8,0,0"/>
+              </StackPanel>
+            </Border>
+
+            <!-- Running -->
+            <Border Style="{StaticResource Card}" Visibility="{Binding ShowProgress, Converter={StaticResource Vis}}">
+              <StackPanel>
+                <DockPanel>
+                  <TextBlock DockPanel.Dock="Right" Text="{Binding TimeText}" Foreground="{StaticResource Muted}" FontFamily="{StaticResource MonoFont}" FontSize="12" VerticalAlignment="Bottom" Margin="0,0,0,6"/>
+                  <TextBlock Text="{Binding ProgressText}" FontFamily="{StaticResource DisplayFont}" FontSize="40" FontWeight="SemiBold"/>
+                </DockPanel>
+                <ProgressBar Style="{StaticResource Progress}" Value="{Binding Progress, Mode=OneWay}" Maximum="100" Margin="0,4,0,10"/>
+                <TextBlock Text="{Binding StageText}" Foreground="{StaticResource Muted}" TextTrimming="CharacterEllipsis"/>
+
+                <TextBlock Text="FOUND SO FAR" Style="{StaticResource Caption}" Margin="0,24,0,10"/>
+                <UniformGrid Columns="2">
+                  <Border Background="{StaticResource RedSoft}" CornerRadius="8" Padding="12,10" Margin="0,0,5,10">
+                    <StackPanel>
+                      <TextBlock Text="{Binding LiveRed}" Foreground="{StaticResource Red}" FontSize="24" FontWeight="SemiBold"/>
+                      <TextBlock Text="Critical" Foreground="{StaticResource Muted}" FontSize="12"/>
+                    </StackPanel>
+                  </Border>
+                  <Border Background="{StaticResource YellowSoft}" CornerRadius="8" Padding="12,10" Margin="5,0,0,10">
+                    <StackPanel>
+                      <TextBlock Text="{Binding LiveYellow}" Foreground="{StaticResource Yellow}" FontSize="24" FontWeight="SemiBold"/>
+                      <TextBlock Text="Warning" Foreground="{StaticResource Muted}" FontSize="12"/>
+                    </StackPanel>
+                  </Border>
+                  <Border Background="{StaticResource GreenSoft}" CornerRadius="8" Padding="12,10" Margin="0,0,5,0">
+                    <StackPanel>
+                      <TextBlock Text="{Binding LiveGreen}" Foreground="{StaticResource Green}" FontSize="24" FontWeight="SemiBold"/>
+                      <TextBlock Text="Clean" Foreground="{StaticResource Muted}" FontSize="12"/>
+                    </StackPanel>
+                  </Border>
+                  <Border Background="{StaticResource InfoSoft}" CornerRadius="8" Padding="12,10" Margin="5,0,0,0">
+                    <StackPanel>
+                      <TextBlock Text="{Binding LiveInfo}" Foreground="{StaticResource Info}" FontSize="24" FontWeight="SemiBold"/>
+                      <TextBlock Text="Info" Foreground="{StaticResource Muted}" FontSize="12"/>
+                    </StackPanel>
+                  </Border>
+                </UniformGrid>
+
+                <Button x:Name="BtnCancel" Style="{StaticResource DangerButton}" Content="Cancel scan" HorizontalAlignment="Stretch" Margin="0,22,0,0"/>
+              </StackPanel>
+            </Border>
+
+            <!-- Done -->
+            <Border Style="{StaticResource Card}" Visibility="{Binding ShowDone, Converter={StaticResource Vis}}">
+              <StackPanel>
+                <TextBlock x:Name="DoneIcon" Text="&#xE73E;" Style="{StaticResource Icon}" FontSize="28" HorizontalAlignment="Left" Foreground="{StaticResource Green}"/>
+                <TextBlock Text="{Binding DoneTitle}" Style="{StaticResource H2}" FontSize="20" Margin="0,12,0,6" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding DoneText}" Style="{StaticResource Body}"/>
+                <Button x:Name="BtnViewFindings" Style="{StaticResource PrimaryButton}" Content="View findings" HorizontalAlignment="Stretch" Margin="0,20,0,8"/>
+                <Button x:Name="BtnDoneHtml" Style="{StaticResource Button}" Content="Open HTML report" HorizontalAlignment="Stretch" Margin="0,0,0,8"/>
+                <Button x:Name="BtnNewScan" Style="{StaticResource GhostButton}" Content="Set up another scan" HorizontalAlignment="Stretch"/>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </Grid>
+
+        <!-- Console -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,24,0,0" Padding="0">
+          <StackPanel>
+            <DockPanel Margin="20,12,12,12">
+              <ToggleButton x:Name="BtnConsole" DockPanel.Dock="Right" Style="{StaticResource Chip}" Content="Show"/>
+              <Button x:Name="BtnCopyLog" DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="Copy" Margin="0,0,6,0"/>
+              <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="&#xE756;" Style="{StaticResource Icon}" FontSize="14" Foreground="{StaticResource Muted}"/>
+                <TextBlock Text="Live output" FontWeight="SemiBold" Margin="10,0,0,0"/>
+                <TextBlock x:Name="LastLine" Foreground="{StaticResource Subtle}" FontFamily="{StaticResource MonoFont}" FontSize="12"
+                           Margin="16,0,0,0" MaxWidth="560" TextTrimming="CharacterEllipsis"/>
+              </StackPanel>
+            </DockPanel>
+            <Border x:Name="ConsoleHost" BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0" Visibility="Collapsed">
+              <RichTextBox x:Name="Console" Height="280" IsReadOnly="True" Background="#080A0E" BorderThickness="0" Padding="14,10"
+                           Foreground="{StaticResource Muted}" FontFamily="{StaticResource MonoFont}" FontSize="12"
+                           VerticalScrollBarVisibility="Auto" IsDocumentEnabled="False">
+                <RichTextBox.Resources>
+                  <Style TargetType="Paragraph">
+                    <Setter Property="Margin" Value="0"/>
+                  </Style>
+                </RichTextBox.Resources>
+              </RichTextBox>
+            </Border>
+          </StackPanel>
+        </Border>
+      </Grid>
+    </ScrollViewer>
+
+    <!-- ======================================================= FINDINGS PAGE -->
+    <Grid x:Name="PageFindings" Visibility="Collapsed" Margin="36,30,36,24">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
+      </Grid.RowDefinitions>
+
+      <!-- Verdict -->
+      <Border Grid.Row="0" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="10"
+              Padding="22,18" Visibility="{Binding HasScan, Converter={StaticResource Vis}}">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <Border Width="46" Height="46" CornerRadius="23" Background="{Binding VerdictSoft}" VerticalAlignment="Top">
+            <TextBlock Text="{Binding VerdictIcon}" Style="{StaticResource Icon}" FontSize="20" HorizontalAlignment="Center" Foreground="{Binding VerdictBrush}"/>
+          </Border>
+          <StackPanel Grid.Column="1" Margin="18,0,18,0">
+            <TextBlock Text="{Binding VerdictTitle}" Style="{StaticResource H1}" FontSize="22" TextWrapping="Wrap"/>
+            <TextBlock Text="{Binding VerdictText}" Style="{StaticResource Body}" Margin="0,4,0,0"/>
+            <TextBlock Margin="0,10,0,0" FontSize="12" Foreground="{StaticResource Subtle}" TextWrapping="Wrap">
+              <Run Text="{Binding ScanHost, Mode=OneWay}" Foreground="{StaticResource Text}" FontWeight="SemiBold"/>
+              <Run Text="  ·  "/>
+              <Run Text="{Binding ScanWhen, Mode=OneWay}"/>
+            </TextBlock>
+          </StackPanel>
+          <StackPanel Grid.Column="2" VerticalAlignment="Top">
+            <Button x:Name="BtnFindHtml" Style="{StaticResource Button}" HorizontalAlignment="Stretch" Margin="0,0,0,8">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Text="&#xE774;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,8,0"/>
+                <TextBlock Text="HTML report"/>
+              </StackPanel>
+            </Button>
+            <Button x:Name="BtnFindFolder" Style="{StaticResource GhostButton}" HorizontalAlignment="Stretch">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Text="&#xE838;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,8,0"/>
+                <TextBlock Text="Report folder"/>
+              </StackPanel>
+            </Button>
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- Severity filter tiles -->
+      <UniformGrid Grid.Row="1" Columns="4" Margin="0,16,0,0" Visibility="{Binding HasScan, Converter={StaticResource Vis}}">
+        <UniformGrid.Resources>
+          <Style TargetType="ToggleButton" BasedOn="{StaticResource BaseButton}">
+            <Setter Property="Margin" Value="0,0,12,0"/>
+            <Setter Property="Padding" Value="16,12"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+              <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                  <Grid>
+                    <Border x:Name="bd" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="10"/>
+                    <Border x:Name="ov" Background="Transparent" CornerRadius="10"/>
+                    <Border x:Name="bar" Height="3" VerticalAlignment="Bottom" CornerRadius="0,0,10,10" Background="{TemplateBinding BorderBrush}" Opacity="0"/>
+                    <ContentPresenter Margin="{TemplateBinding Padding}"/>
+                  </Grid>
+                  <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                      <Setter TargetName="ov" Property="Background" Value="{StaticResource Hover}"/>
+                    </Trigger>
+                    <Trigger Property="IsChecked" Value="True">
+                      <Setter TargetName="bd" Property="Background" Value="{StaticResource Surface2}"/>
+                      <Setter TargetName="bar" Property="Opacity" Value="1"/>
+                    </Trigger>
+                    <Trigger Property="IsChecked" Value="False">
+                      <Setter Property="Opacity" Value="0.6"/>
+                    </Trigger>
+                  </ControlTemplate.Triggers>
+                </ControlTemplate>
+              </Setter.Value>
+            </Setter>
+          </Style>
+        </UniformGrid.Resources>
+        <ToggleButton IsChecked="{Binding ShowRed}" BorderBrush="{StaticResource Red}" ToolTip="Show or hide critical findings">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Right" Text="&#xE7BA;" Style="{StaticResource Icon}" Foreground="{StaticResource Red}" VerticalAlignment="Top"/>
+            <StackPanel>
+              <TextBlock Text="{Binding Red}" FontSize="26" FontWeight="SemiBold" Foreground="{StaticResource Red}"/>
+              <TextBlock Text="Critical" Foreground="{StaticResource Muted}" FontWeight="Normal"/>
+            </StackPanel>
+          </DockPanel>
+        </ToggleButton>
+        <ToggleButton IsChecked="{Binding ShowYellow}" BorderBrush="{StaticResource Yellow}" ToolTip="Show or hide warnings">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Right" Text="&#xE814;" Style="{StaticResource Icon}" Foreground="{StaticResource Yellow}" VerticalAlignment="Top"/>
+            <StackPanel>
+              <TextBlock Text="{Binding Yellow}" FontSize="26" FontWeight="SemiBold" Foreground="{StaticResource Yellow}"/>
+              <TextBlock Text="Warning" Foreground="{StaticResource Muted}" FontWeight="Normal"/>
+            </StackPanel>
+          </DockPanel>
+        </ToggleButton>
+        <ToggleButton IsChecked="{Binding ShowGreen}" BorderBrush="{StaticResource Green}" ToolTip="Show or hide checks that passed">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Right" Text="&#xE73E;" Style="{StaticResource Icon}" Foreground="{StaticResource Green}" VerticalAlignment="Top"/>
+            <StackPanel>
+              <TextBlock Text="{Binding Green}" FontSize="26" FontWeight="SemiBold" Foreground="{StaticResource Green}"/>
+              <TextBlock Text="Clean" Foreground="{StaticResource Muted}" FontWeight="Normal"/>
+            </StackPanel>
+          </DockPanel>
+        </ToggleButton>
+        <ToggleButton IsChecked="{Binding ShowInfo}" BorderBrush="{StaticResource Info}" Margin="0" ToolTip="Show or hide informational context">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Right" Text="&#xE946;" Style="{StaticResource Icon}" Foreground="{StaticResource Info}" VerticalAlignment="Top"/>
+            <StackPanel>
+              <TextBlock Text="{Binding Info}" FontSize="26" FontWeight="SemiBold" Foreground="{StaticResource Info}"/>
+              <TextBlock Text="Info" Foreground="{StaticResource Muted}" FontWeight="Normal"/>
+            </StackPanel>
+          </DockPanel>
+        </ToggleButton>
+      </UniformGrid>
+
+      <!-- Toolbar -->
+      <DockPanel Grid.Row="2" Margin="0,16,0,12" Visibility="{Binding HasScan, Converter={StaticResource Vis}}">
+        <TextBlock DockPanel.Dock="Right" Text="{Binding ShownText}" Foreground="{StaticResource Subtle}" VerticalAlignment="Center" Margin="16,0,0,0"/>
+        <CheckBox DockPanel.Dock="Right" Style="{StaticResource Switch}" IsChecked="{Binding OnlyNew}" Margin="16,0,0,0" VerticalAlignment="Center"
+                  Visibility="{Binding HasBaseline, Converter={StaticResource Vis}}" ToolTip="{Binding BaselineText}">
+          <TextBlock Text="Only new since last scan" Foreground="{StaticResource Muted}"/>
+        </CheckBox>
+        <ComboBox x:Name="ModuleFilterBox" DockPanel.Dock="Right" Style="{StaticResource Combo}" Width="250" Height="36" Margin="12,0,0,0"
+                  ItemsSource="{Binding ModuleFilters}" SelectedItem="{Binding ModuleFilter}" DisplayMemberPath="Label"/>
+        <TextBox x:Name="SearchBox" Style="{StaticResource SearchBox}" Height="36" Tag="Search titles, details, paths…  (Ctrl+F)"
+                 Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}"/>
+      </DockPanel>
+
+      <!-- Master / detail -->
+      <Grid Grid.Row="3" Visibility="{Binding HasScan, Converter={StaticResource Vis}}">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="5*" MinWidth="320"/>
+          <ColumnDefinition Width="16"/>
+          <ColumnDefinition Width="6*"/>
+        </Grid.ColumnDefinitions>
+
+        <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="10" Padding="6">
+          <Grid>
+            <ListBox x:Name="FindingsList" Style="{StaticResource PlainList}" ItemsSource="{Binding FindingsView}" SelectedItem="{Binding Selected}">
+              <ListBox.ItemTemplate>
+                <DataTemplate>
+                  <Grid Margin="10,10,10,10">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="4"/>
+                      <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Background="{Binding SeverityBrush}" CornerRadius="2"/>
+                    <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                      <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" MaxHeight="40" TextTrimming="CharacterEllipsis"/>
+                      <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                        <TextBlock Text="{Binding SeverityLabel}" Foreground="{Binding SeverityBrush}" FontSize="11" FontWeight="SemiBold"/>
+                        <TextBlock Text="  ·  " Foreground="{StaticResource Subtle}" FontSize="11"/>
+                        <TextBlock Text="{Binding ModuleLabel}" Foreground="{StaticResource Subtle}" FontSize="11"/>
+                        <Border Background="{StaticResource AccentSoft}" CornerRadius="4" Padding="5,0" Margin="8,0,0,0"
+                                Visibility="{Binding IsNew, Converter={StaticResource Vis}}">
+                          <TextBlock Text="NEW" Foreground="{StaticResource Accent}" FontSize="10" FontWeight="Bold"/>
+                        </Border>
+                      </StackPanel>
+                    </StackPanel>
+                  </Grid>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding NothingShown, Converter={StaticResource Vis}}">
+              <TextBlock Text="&#xE71C;" Style="{StaticResource Icon}" FontSize="28" Foreground="{StaticResource Subtle}" HorizontalAlignment="Center"/>
+              <TextBlock Text="No findings match these filters" Foreground="{StaticResource Muted}" Margin="0,10,0,0"/>
+            </StackPanel>
+          </Grid>
+        </Border>
+
+        <!-- Detail -->
+        <Border Grid.Column="2" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="10">
+          <Grid>
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding HasSelected, Converter={StaticResource Vis}}">
+              <StackPanel Margin="26,22,26,26" DataContext="{Binding Selected}">
+                <StackPanel Orientation="Horizontal">
+                  <Border Background="{Binding SeveritySoft}" CornerRadius="10" Padding="10,3">
+                    <TextBlock Text="{Binding SeverityLabel}" Foreground="{Binding SeverityBrush}" FontWeight="SemiBold" FontSize="12"/>
+                  </Border>
+                  <TextBlock Text="{Binding ModuleLabel}" Foreground="{StaticResource Subtle}" Margin="12,0,0,0" VerticalAlignment="Center" FontSize="12"/>
+                  <Border Background="{StaticResource AccentSoft}" CornerRadius="4" Padding="6,1" Margin="10,0,0,0" VerticalAlignment="Center"
+                          Visibility="{Binding IsNew, Converter={StaticResource Vis}}">
+                    <TextBlock Text="NEW SINCE LAST SCAN" Foreground="{StaticResource Accent}" FontSize="10" FontWeight="Bold"/>
+                  </Border>
+                </StackPanel>
+                <TextBox Text="{Binding Title, Mode=OneWay}" Style="{StaticResource SelectableText}" FontFamily="{StaticResource DisplayFont}"
+                         FontSize="20" FontWeight="SemiBold" Margin="0,14,0,0"/>
+
+                <StackPanel Visibility="{Binding HasDetail, Converter={StaticResource Vis}}" Margin="0,20,0,0">
+                  <TextBlock Text="DETAIL" Style="{StaticResource Caption}" Margin="0,0,0,8"/>
+                  <Border Background="{StaticResource Bg}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="8" Padding="14,12">
+                    <TextBox Text="{Binding Detail, Mode=OneWay}" Style="{StaticResource SelectableText}" FontFamily="{StaticResource MonoFont}" FontSize="12.5"/>
+                  </Border>
+                </StackPanel>
+
+                <StackPanel Visibility="{Binding HasWhy, Converter={StaticResource Vis}}" Margin="0,20,0,0">
+                  <TextBlock Text="WHY IT MATTERS" Style="{StaticResource Caption}" Margin="0,0,0,6"/>
+                  <TextBox Text="{Binding WhyItMatters, Mode=OneWay}" Style="{StaticResource SelectableText}" FontSize="13.5"/>
+                </StackPanel>
+
+                <Border Visibility="{Binding HasNormal, Converter={StaticResource Vis}}" Margin="0,20,0,0" Background="{StaticResource GreenSoft}"
+                        CornerRadius="8" Padding="14,12">
+                  <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                      <TextBlock Text="&#xE946;" Style="{StaticResource Icon}" FontSize="12" Foreground="{StaticResource Green}"/>
+                      <TextBlock Text="MAY BE NORMAL" Style="{StaticResource Caption}" Foreground="{StaticResource Green}" Margin="8,0,0,0"/>
+                    </StackPanel>
+                    <TextBox Text="{Binding WhyMightBeNormal, Mode=OneWay}" Style="{StaticResource SelectableText}" Foreground="{StaticResource Muted}"/>
+                  </StackPanel>
+                </Border>
+
+                <TextBlock Text="{Binding MetaText}" Foreground="{StaticResource Subtle}" FontFamily="{StaticResource MonoFont}" FontSize="12"
+                           Margin="0,18,0,0" Visibility="{Binding HasMeta, Converter={StaticResource Vis}}" TextWrapping="Wrap"/>
+
+                <StackPanel Orientation="Horizontal" Margin="0,24,0,0">
+                  <Button x:Name="BtnCopyFinding" Style="{StaticResource Button}">
+                    <StackPanel Orientation="Horizontal">
+                      <TextBlock Text="&#xE8C8;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,8,0"/>
+                      <TextBlock Text="Copy"/>
+                    </StackPanel>
+                  </Button>
+                  <Button x:Name="BtnModuleReport" Style="{StaticResource GhostButton}" Margin="8,0,0,0" IsEnabled="{Binding HasReport}">
+                    <StackPanel Orientation="Horizontal">
+                      <TextBlock Text="&#xE8A7;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,8,0"/>
+                      <TextBlock Text="Open module report"/>
+                    </StackPanel>
+                  </Button>
+                </StackPanel>
+              </StackPanel>
+            </ScrollViewer>
+            <TextBlock Text="Select a finding to see the full detail" Foreground="{StaticResource Subtle}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Visibility="{Binding NothingShown, Converter={StaticResource Vis}}"/>
+          </Grid>
+        </Border>
+      </Grid>
+
+      <!-- Empty state -->
+      <StackPanel Grid.RowSpan="4" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="{Binding NoScan, Converter={StaticResource Vis}}">
+        <TextBlock Text="&#xE7C3;" Style="{StaticResource Icon}" FontSize="40" Foreground="{StaticResource Subtle}" HorizontalAlignment="Center"/>
+        <TextBlock Text="No scan loaded" Style="{StaticResource H2}" FontSize="20" HorizontalAlignment="Center" Margin="0,16,0,6"/>
+        <TextBlock Text="Run a scan on this machine, or open a scan folder collected from another one." Foreground="{StaticResource Muted}" HorizontalAlignment="Center"/>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,20,0,0">
+          <Button x:Name="BtnEmptyScan" Style="{StaticResource PrimaryButton}" Content="Start a scan"/>
+          <Button x:Name="BtnEmptyOpen" Style="{StaticResource Button}" Content="Open scan folder…" Margin="10,0,0,0" Padding="18,11"/>
+        </StackPanel>
+      </StackPanel>
+    </Grid>
+
+    <!-- ======================================================= HISTORY PAGE -->
+    <Grid x:Name="PageHistory" Visibility="Collapsed" Margin="36,30,36,24">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
+      </Grid.RowDefinitions>
+      <DockPanel Margin="0,0,0,20">
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+          <Button x:Name="BtnHistOpen" Style="{StaticResource Button}">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="&#xE838;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,8,0"/>
+              <TextBlock Text="Open scan folder…"/>
+            </StackPanel>
+          </Button>
+          <Button x:Name="BtnHistRefresh" Style="{StaticResource GhostButton}" Margin="6,0,0,0" ToolTip="Refresh (F5)">
+            <TextBlock Text="&#xE72C;" Style="{StaticResource Icon}" FontSize="14"/>
+          </Button>
+        </StackPanel>
+        <StackPanel>
+          <TextBlock Text="Scan history" Style="{StaticResource H1}"/>
+          <TextBlock x:Name="HistSubtitle" Style="{StaticResource Body}" Margin="0,6,0,0"/>
+        </StackPanel>
+      </DockPanel>
+
+      <ListBox Grid.Row="1" x:Name="HistoryList" Style="{StaticResource PlainList}" ItemsSource="{Binding History}">
+        <ListBox.ItemTemplate>
+          <DataTemplate>
+            <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="10" Padding="20,14" Margin="0,0,0,8">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="170"/>
+                  <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="Auto"/>
+                  <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                  <TextBlock Text="{Binding DateText}" FontWeight="SemiBold" FontSize="14"/>
+                  <TextBlock Text="{Binding TimeText}" Foreground="{StaticResource Muted}" FontFamily="{StaticResource MonoFont}" FontSize="12" Margin="0,2,0,0"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="{Binding Hostname}" FontWeight="SemiBold"/>
+                    <TextBlock Text="  ·  " Foreground="{StaticResource Subtle}"/>
+                    <TextBlock Text="{Binding ModulesText}" Foreground="{StaticResource Muted}"/>
+                    <Border Background="{StaticResource AccentSoft}" CornerRadius="4" Padding="6,0" Margin="10,0,0,0"
+                            Visibility="{Binding IsCurrent, Converter={StaticResource Vis}}">
+                      <TextBlock Text="OPEN" Foreground="{StaticResource Accent}" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
+                    </Border>
+                  </StackPanel>
+                  <TextBlock Text="{Binding Folder}" Foreground="{StaticResource Subtle}" FontFamily="{StaticResource MonoFont}" FontSize="11"
+                             TextTrimming="CharacterEllipsis" Margin="0,3,0,0" ToolTip="{Binding Folder}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,20,0">
+                  <Border Background="{StaticResource RedSoft}" CornerRadius="10" Padding="9,2" Margin="0,0,6,0" Visibility="{Binding HasRed, Converter={StaticResource Vis}}">
+                    <TextBlock Foreground="{StaticResource Red}" FontSize="12" FontWeight="SemiBold"><Run Text="{Binding Red, Mode=OneWay}"/><Run Text=" critical"/></TextBlock>
+                  </Border>
+                  <Border Background="{StaticResource YellowSoft}" CornerRadius="10" Padding="9,2" Margin="0,0,6,0" Visibility="{Binding HasYellow, Converter={StaticResource Vis}}">
+                    <TextBlock Foreground="{StaticResource Yellow}" FontSize="12" FontWeight="SemiBold"><Run Text="{Binding Yellow, Mode=OneWay}"/><Run Text=" warning"/></TextBlock>
+                  </Border>
+                  <Border Background="{StaticResource GreenSoft}" CornerRadius="10" Padding="9,2" Visibility="{Binding AllClear, Converter={StaticResource Vis}}">
+                    <TextBlock Text="All clear" Foreground="{StaticResource Green}" FontSize="12" FontWeight="SemiBold"/>
+                  </Border>
+                </StackPanel>
+                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                  <Button Style="{StaticResource Button}" Content="Open" Command="{Binding OpenCommand}"/>
+                  <Button Style="{StaticResource GhostButton}" Margin="6,0,0,0" Command="{Binding FolderCommand}" ToolTip="Show in Explorer">
+                    <TextBlock Text="&#xE838;" Style="{StaticResource Icon}" FontSize="14"/>
+                  </Button>
+                </StackPanel>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+        <ListBox.ItemContainerStyle>
+          <Style TargetType="ListBoxItem">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+              <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                  <ContentPresenter/>
+                </ControlTemplate>
+              </Setter.Value>
+            </Setter>
+          </Style>
+        </ListBox.ItemContainerStyle>
+      </ListBox>
+
+      <StackPanel Grid.Row="1" x:Name="HistEmpty" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
+        <TextBlock Text="&#xE81C;" Style="{StaticResource Icon}" FontSize="40" Foreground="{StaticResource Subtle}" HorizontalAlignment="Center"/>
+        <TextBlock Text="No scans yet" Style="{StaticResource H2}" FontSize="20" HorizontalAlignment="Center" Margin="0,16,0,6"/>
+        <TextBlock Text="Finished scans appear here. Each one is a folder you can copy, archive or hand off." Foreground="{StaticResource Muted}" HorizontalAlignment="Center"/>
+      </StackPanel>
+    </Grid>
+
+    <!-- ======================================================= EXPORT PAGE -->
+    <Grid x:Name="PageExport" Visibility="Collapsed" Margin="36,30,36,24">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
+      </Grid.RowDefinitions>
+      <StackPanel Margin="0,0,0,20">
+        <TextBlock Text="Export &amp; share" Style="{StaticResource H1}"/>
+        <TextBlock Style="{StaticResource Body}" Margin="0,6,0,0" MaxWidth="760" HorizontalAlignment="Left"
+                   Text="Everything here is generated from the open scan. Reports contain host names, account names, paths and IP addresses -- review before sending them anywhere."/>
+      </StackPanel>
+
+      <Grid Grid.Row="1" Margin="0,0,0,16" IsEnabled="{Binding HasScan}">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="16"/>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="16"/>
+          <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <Border Style="{StaticResource Card}">
+          <DockPanel>
+            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,14,0,0">
+              <Button x:Name="BtnCopyExport" Style="{StaticResource PrimaryButton}" Content="Copy" Padding="16,8" FontSize="13"/>
+              <Button x:Name="BtnSaveExport" Style="{StaticResource Button}" Content="Save as…" Margin="8,0,0,0"/>
+            </StackPanel>
+            <StackPanel>
+              <TextBlock Text="&#xE8BD;" Style="{StaticResource Icon}" FontSize="20" HorizontalAlignment="Left" Foreground="{StaticResource Accent}"/>
+              <TextBlock Text="Hand-off summary" Style="{StaticResource H2}" Margin="0,10,0,4"/>
+              <TextBlock Style="{StaticResource Body}" FontSize="12" Text="Plain-text digest from the correlation module, sized for a ticket, an email or an AI assistant."/>
+            </StackPanel>
+          </DockPanel>
+        </Border>
+        <Border Grid.Column="2" Style="{StaticResource Card}">
+          <DockPanel>
+            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,14,0,0">
+              <Button x:Name="BtnCsv" Style="{StaticResource Button}" Content="Findings as CSV…"/>
+              <Button x:Name="BtnExpHtml" Style="{StaticResource GhostButton}" Content="HTML report" Margin="6,0,0,0"/>
+            </StackPanel>
+            <StackPanel>
+              <TextBlock Text="&#xE9F9;" Style="{StaticResource Icon}" FontSize="20" HorizontalAlignment="Left" Foreground="{StaticResource Accent}"/>
+              <TextBlock Text="Spreadsheet &amp; HTML" Style="{StaticResource H2}" Margin="0,10,0,4"/>
+              <TextBlock Style="{StaticResource Body}" FontSize="12" Text="Every finding with its context as CSV (formula-safe for Excel), or the browsable HTML report set."/>
+            </StackPanel>
+          </DockPanel>
+        </Border>
+        <Border Grid.Column="4" Style="{StaticResource Card}">
+          <DockPanel>
+            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,14,0,0">
+              <Button x:Name="BtnVerify" Style="{StaticResource Button}" Content="Verify folder"/>
+              <Button x:Name="BtnExpFolder" Style="{StaticResource GhostButton}" Content="Open folder" Margin="6,0,0,0"/>
+            </StackPanel>
+            <StackPanel>
+              <TextBlock Text="&#xE72E;" Style="{StaticResource Icon}" FontSize="20" HorizontalAlignment="Left" Foreground="{StaticResource Accent}"/>
+              <TextBlock Text="Evidence integrity" Style="{StaticResource H2}" Margin="0,10,0,4"/>
+              <TextBlock Style="{StaticResource Body}" FontSize="12" Text="{Binding ManifestText}"/>
+            </StackPanel>
+          </DockPanel>
+        </Border>
+      </Grid>
+
+      <Border Grid.Row="2" Style="{StaticResource Card}" Padding="0" Visibility="{Binding HasScan, Converter={StaticResource Vis}}">
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Top" Text="PREVIEW  ·  10_Correlation_Export.txt" Style="{StaticResource Caption}" Margin="20,14,20,10"/>
+          <TextBox Text="{Binding ExportPreview, Mode=OneWay}" IsReadOnly="True" Background="#080A0E" Foreground="{StaticResource Muted}" BorderThickness="0,1,0,0"
+                   BorderBrush="{StaticResource Border}" Padding="18,12" FontFamily="{StaticResource MonoFont}" FontSize="12"
+                   VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" SelectionBrush="{StaticResource Accent}"/>
+        </DockPanel>
+      </Border>
+      <TextBlock Grid.Row="2" Text="Open a scan to export it." Foreground="{StaticResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                 Visibility="{Binding NoScan, Converter={StaticResource Vis}}"/>
+    </Grid>
+
+    <!-- ======================================================= ABOUT PAGE -->
+    <ScrollViewer x:Name="PageAbout" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+      <StackPanel Margin="36,30,36,30" MaxWidth="900" HorizontalAlignment="Left">
+        <StackPanel Orientation="Horizontal">
+          <Viewbox Width="56" Height="56">
+            <Canvas Width="24" Height="24">
+              <Path Data="M12,1.6 L20.6,4.8 V11.2 C20.6,16.6 17,20.9 12,22.4 C7,20.9 3.4,16.6 3.4,11.2 V4.8 Z"
+                    Fill="#162033" Stroke="{StaticResource Accent}" StrokeThickness="1.2" StrokeLineJoin="Round"/>
+              <Ellipse Canvas.Left="10.1" Canvas.Top="5.6" Width="3.8" Height="3.8" Fill="{StaticResource Red}"/>
+              <Ellipse Canvas.Left="10.1" Canvas.Top="10.3" Width="3.8" Height="3.8" Fill="{StaticResource Yellow}"/>
+              <Ellipse Canvas.Left="10.1" Canvas.Top="15.0" Width="3.8" Height="3.8" Fill="{StaticResource Green}"/>
+            </Canvas>
+          </Viewbox>
+          <StackPanel Margin="18,0,0,0" VerticalAlignment="Center">
+            <TextBlock Text="Windows Forensic Triage Toolkit" Style="{StaticResource H1}"/>
+            <TextBlock Text="{Binding VersionLong}" Foreground="{StaticResource Muted}" Margin="0,4,0,0"/>
+          </StackPanel>
+        </StackPanel>
+
+        <TextBlock Style="{StaticResource Body}" Margin="0,22,0,0" FontSize="14"
+                   Text="A portable, read-only first look at a Windows machine you suspect may be compromised. Ten PowerShell modules gather evidence, a correlation pass explains the noise, and every finding says why it matters and when it might be normal."/>
+
+        <Grid Margin="0,24,0,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="16"/>
+            <ColumnDefinition Width="*"/>
+          </Grid.ColumnDefinitions>
+          <Border Style="{StaticResource Card}">
+            <StackPanel>
+              <TextBlock Text="Read-only by design" Style="{StaticResource H2}" Margin="0,0,0,12"/>
+              <TextBlock Style="{StaticResource Body}" xml:space="preserve">•  No registry writes, no services, no scheduled tasks
+•  No changes to system files or settings, no remediation
+•  No network traffic except reverse-DNS lookups in module 08
+•  Writes only: the report folder you choose, plus a
+    temporary locked script folder in ProgramData that is
+    deleted when the scan ends</TextBlock>
+            </StackPanel>
+          </Border>
+          <Border Grid.Column="2" Style="{StaticResource Card}">
+            <StackPanel>
+              <TextBlock Text="Script integrity" Style="{StaticResource H2}" Margin="0,0,0,4"/>
+              <TextBlock Style="{StaticResource Body}" FontSize="12" Margin="0,0,0,10"
+                         Text="SHA-256 of each embedded script, checked against the hash compiled in at build time. Checked again before every module runs."/>
+              <ItemsControl ItemsSource="{Binding Integrity}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <DockPanel Margin="0,2">
+                      <TextBlock x:Name="ok" DockPanel.Dock="Left" Text="&#xE73E;" Style="{StaticResource Icon}" FontSize="12" Foreground="{StaticResource Green}" Margin="0,0,10,0"/>
+                      <TextBlock Text="{Binding Key}" FontFamily="{StaticResource MonoFont}" FontSize="12" Foreground="{StaticResource Muted}"/>
+                    </DockPanel>
+                    <DataTemplate.Triggers>
+                      <DataTrigger Binding="{Binding Value}" Value="False">
+                        <Setter TargetName="ok" Property="Text" Value="&#xE711;"/>
+                        <Setter TargetName="ok" Property="Foreground" Value="{StaticResource Red}"/>
+                      </DataTrigger>
+                    </DataTemplate.Triggers>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
+        </Grid>
+
+        <Border Style="{StaticResource Card}" Margin="0,16,0,0">
+          <StackPanel>
+            <TextBlock Text="Command line" Style="{StaticResource H2}" Margin="0,0,0,10"/>
+            <TextBlock Style="{StaticResource Body}" FontSize="12" Margin="0,0,0,10"
+                       Text="Run unattended from an elevated prompt. Exit code: 0 clean, 1 warnings, 2 critical, 3 error or cancelled."/>
+            <Border Background="#080A0E" CornerRadius="8" Padding="14,12">
+              <TextBox Style="{StaticResource SelectableText}" FontFamily="{StaticResource MonoFont}" FontSize="12" Foreground="{StaticResource Muted}"
+                       Text="start /wait TriageToolkit.exe --headless [--out D:\Evidence] [--modules 01,03,06] [--skip 08] [--net-minutes 2]"/>
+            </Border>
+          </StackPanel>
+        </Border>
+
+        <StackPanel Orientation="Horizontal" Margin="0,22,0,0">
+          <Button x:Name="BtnGitHub" Style="{StaticResource Button}">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="&#xE8A7;" Style="{StaticResource Icon}" FontSize="13" Margin="0,0,8,0"/>
+              <TextBlock Text="Source on GitHub"/>
+            </StackPanel>
+          </Button>
+          <TextBlock Text="MIT License  ·  Maxim Stark" Foreground="{StaticResource Subtle}" VerticalAlignment="Center" Margin="16,0,0,0"/>
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- ======================================================= TOAST -->
+    <Border x:Name="Toast" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,28" Background="{StaticResource Surface2}"
+            BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="9" Padding="16,10" Opacity="0" IsHitTestVisible="False">
+      <Border.Effect>
+        <DropShadowEffect BlurRadius="24" ShadowDepth="4" Opacity="0.5" Color="Black"/>
+      </Border.Effect>
+      <StackPanel Orientation="Horizontal">
+        <TextBlock Text="&#xE73E;" Style="{StaticResource Icon}" FontSize="13" Foreground="{StaticResource Green}" Margin="0,0,10,0"/>
+        <TextBlock x:Name="ToastText"/>
+      </StackPanel>
+    </Border>
+  </Grid>
+</Grid>

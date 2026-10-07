@@ -1,6 +1,6 @@
 # =============================================================================
 # Common.ps1 -- Shared Library for Windows Forensic Triage Toolkit
-# Version: 1.5
+# Version: 2.0
 # Compatible: Windows 10/11, PowerShell 5.1+
 # =============================================================================
 
@@ -10,7 +10,7 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 
 # --- CONSTANTS ----------------------------------------------------------------
 
-$TOOLKIT_VERSION = "1.5"
+$TOOLKIT_VERSION = "2.0"
 
 $SEV_GREEN  = "GREEN"
 $SEV_YELLOW = "YELLOW"
@@ -62,7 +62,17 @@ $WHITELISTED_APPDATA_PATHS = @(
     "*\Microsoft\WindowsApps\*",
     "*\chocolatey\*",
     "*\AppData\Roaming\npm\*",
-    "*\AppData\Roaming\uv\*"
+    "*\AppData\Roaming\uv\*",
+    # Task 3: Toolkit self-exclusion and additional noise-reduction paths
+    "*\Temp\TriageToolkit-*\*",
+    "*\ProgramData\TriageToolkit-run-*\*",
+    "*\Windows\AppRepository\Packages\MicrosoftWindows.Client.*",
+    "*\Temp\is-*.tmp\*",
+    "*\Temp\nsc*.tmp\*",
+    "*\Temp\nsp*.tmp\*",
+    "*\Temp\nse*.tmp\*",
+    "*\AppData\Local\Temp\lu*\*",
+    "*\Amazon\Kindle\*"
 )
 
 $SUSPICIOUS_PATHS = @(
@@ -130,7 +140,7 @@ function Initialize-ReportDir {
         $logsRoot   = Join-Path $scriptRoot "Logs"
         $hostname   = $env:COMPUTERNAME
         $date       = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
-        $scanFolder = Join-Path $logsRoot $hostname $date
+        $scanFolder = Join-Path (Join-Path $logsRoot $hostname) $date
     }
 
     # Reuse existing report dir within same session
@@ -176,6 +186,53 @@ function Get-SafeEventLog {
     } catch { return @() }
 }
 
+# --- LONG PATH NAMES (v2.0) --------------------------------------------------
+# %TEMP% is often an 8.3 short path (C:\Users\JOHNSM~1\...). Resolve-Path does
+# not expand those, so the same folder could be scanned and reported twice.
+function ConvertTo-LongPath {
+    param([string]$Path)
+    try {
+        if (-not ("TriageNative.PathApi" -as [type])) {
+            Add-Type -Namespace TriageNative -Name PathApi -MemberDefinition @"
+[System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+public static extern uint GetLongPathName(string shortPath, System.Text.StringBuilder longPath, uint size);
+"@ -ErrorAction Stop
+        }
+        $sb = New-Object System.Text.StringBuilder 1024
+        if ([TriageNative.PathApi]::GetLongPathName($Path, $sb, 1024) -gt 0) { return $sb.ToString() }
+    } catch { }
+    return $Path
+}
+
+# --- SAFE RECURSIVE FILE WALK (v2.0) -----------------------------------------
+# Get-ChildItem -Recurse -Force follows the legacy "Application Data" junctions,
+# which point back at their own parent (LOCALAPPDATA\Application Data -> LOCALAPPDATA,
+# ProgramData\Application Data -> ProgramData). The walk then loops until the path
+# limit, reporting every file dozens of times and eating any -First N cap.
+# This walker never descends into reparse points (junctions, symlinks, mount
+# points) and streams results, so a downstream Select-Object -First stops it early.
+function Get-ChildFilesSafe {
+    param(
+        [string]$Path,
+        [string[]]$Include = @("*")
+    )
+    if (-not (Test-Path -LiteralPath $Path -ErrorAction SilentlyContinue)) { return }
+    $queue = New-Object System.Collections.Generic.Queue[string]
+    $queue.Enqueue($Path)
+    while ($queue.Count -gt 0) {
+        $dir = $queue.Dequeue()
+        foreach ($item in @(Get-ChildItem -LiteralPath $dir -Force -ErrorAction SilentlyContinue)) {
+            if ($item.PSIsContainer) {
+                if (-not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { $queue.Enqueue($item.FullName) }
+                continue
+            }
+            foreach ($pattern in $Include) {
+                if ($item.Name -like $pattern) { $item; break }
+            }
+        }
+    }
+}
+
 # --- PUBLISHER VERIFICATION ---------------------------------------------------
 
 function Get-FilePublisher {
@@ -204,6 +261,45 @@ function Test-IsWhitelistedPath {
     param([string]$FilePath)
     foreach ($pattern in $WHITELISTED_APPDATA_PATHS) {
         if ($FilePath -like $pattern) { return $true }
+    }
+    return $false
+}
+
+# --- WINLOGON SAFE VALUES (used by module 06) -------------------------------
+# Stock Windows executables expected in Winlogon Shell/Userinit values
+$WINLOGON_SAFE_EXES = @(
+    'userinit.exe', 'explorer.exe', 'sihost.exe', 'ShellAppRuntime.exe',
+    'winlogon.exe', 'wininit.exe', 'csrss.exe', 'lsass.exe', 'services.exe'
+)
+
+function Test-IsSafeWinlogonValue {
+    param([string]$Value)
+    $systemDirs = @(
+        [Environment]::ExpandEnvironmentVariables('%SystemRoot%').TrimEnd('\'),
+        [Environment]::ExpandEnvironmentVariables('%SystemRoot%\System32').TrimEnd('\'),
+        [Environment]::ExpandEnvironmentVariables('%SystemRoot%\SysWOW64').TrimEnd('\')
+    )
+    $entries = @($Value -split ',' | ForEach-Object { $_.Trim().Trim('"') } | Where-Object { $_ })
+    if ($entries.Count -eq 0) { return $false }
+    foreach ($entry in $entries) {
+        $exe  = ($entry -split '\s+')[0]
+        $exe  = [Environment]::ExpandEnvironmentVariables($exe)
+        $leaf = Split-Path $exe -Leaf
+        if ($WINLOGON_SAFE_EXES -notcontains $leaf) { return $false }
+        $dir = Split-Path $exe -Parent
+        if ($dir -and ($systemDirs -notcontains $dir.TrimEnd('\'))) { return $false }
+    }
+    return $true
+}
+
+# --- DEVELOPER ENVIRONMENTS (used by module 02) ----------------------------
+# Package-manager folders full of unsigned-by-design launchers and libraries
+function Test-IsDevEnvironmentDir([string]$Dir) {
+    if ($Dir -match '(?i)\\(site-packages|node_modules|\.venv|venv|\.cargo|\.rustup|go\\bin|\.tox|\.nox|conda|miniconda\d*|anaconda\d*|pipx|\.local\\bin)(\\|$)') { return $true }
+    if ($Dir -match '(?i)\\uv\\(python|tools|cache)\\') { return $true }
+    $parent = Split-Path $Dir -Parent
+    foreach ($probe in @((Join-Path $Dir "python.exe"), (Join-Path $Dir "pyvenv.cfg"), (Join-Path $parent "pyvenv.cfg"), (Join-Path $parent "python.exe"))) {
+        if (Test-Path $probe -ErrorAction SilentlyContinue) { return $true }
     }
     return $false
 }
@@ -243,7 +339,10 @@ function Write-ModuleJson {
         [string]$Hostname,
         [string]$ScanTime
     )
-    $jsonPath = Join-Path $ReportDir "${ModuleNumber}_${ModuleTitle -replace '[^a-zA-Z0-9]','_'}.json"
+    # v2.0: "${ModuleTitle -replace ...}" inside a string is a variable *name*, not an
+    # expression, so every file used to come out as "01_.json". Compute it first.
+    $safeTitle = $ModuleTitle -replace '[^a-zA-Z0-9]', '_'
+    $jsonPath  = Join-Path $ReportDir "${ModuleNumber}_$safeTitle.json"
     $output = @{
         module       = $ModuleNumber
         title        = $ModuleTitle
@@ -451,7 +550,8 @@ function ConvertTo-HtmlTable {
         [string[]]$Headers,
         [string[]]$Properties
     )
-    if (-not $Data -or $Data.Count -eq 0) {
+    $Data = @($Data | Where-Object { $null -ne $_ })
+    if ($Data.Count -eq 0) {
         return "<p class='no-findings'>No data found.</p>"
     }
     $html = "<table><thead><tr>"
@@ -479,14 +579,16 @@ function ConvertTo-HtmlFinding {
         default  { "finding-info" }
     }
     $badge  = Get-SeverityBadge -Severity $Finding.Severity
+    # v2.0: finding text carries attacker-controllable strings (PS history lines,
+    # task names, registry values, file paths) -- always encode before it reaches HTML.
     $normal = if ($Finding.WhyMightBeNormal) {
-        "<div class='finding-normal'>[i] May be normal: $($Finding.WhyMightBeNormal)</div>"
+        "<div class='finding-normal'>[i] May be normal: $(ConvertTo-HtmlEncoded $Finding.WhyMightBeNormal)</div>"
     } else { "" }
     return @"
 <div class="finding $class">
-  <div class="finding-title">$badge $($Finding.Title)</div>
-  <div class="finding-detail">$($Finding.Detail)</div>
-  <div class="finding-why">$($Finding.WhyItMatters)</div>
+  <div class="finding-title">$badge $(ConvertTo-HtmlEncoded $Finding.Title)</div>
+  <div class="finding-detail">$(ConvertTo-HtmlEncoded $Finding.Detail)</div>
+  <div class="finding-why">$(ConvertTo-HtmlEncoded $Finding.WhyItMatters)</div>
   $normal
 </div>
 "@
@@ -494,7 +596,8 @@ function ConvertTo-HtmlFinding {
 
 function ConvertTo-HtmlFindings {
     param([array]$Findings)
-    if (-not $Findings -or $Findings.Count -eq 0) {
+    $Findings = @($Findings | Where-Object { $_ })
+    if ($Findings.Count -eq 0) {
         return "<p class='no-findings'>[OK] No findings in this section.</p>"
     }
     $order  = @{ "RED" = 0; "YELLOW" = 1; "GREEN" = 2; "INFO" = 3 }
@@ -506,10 +609,12 @@ function ConvertTo-HtmlFindings {
 
 function Get-SummaryBar {
     param([array]$AllFindings)
-    $red    = ($AllFindings | Where-Object { $_.Severity -eq "RED"    }).Count
-    $yellow = ($AllFindings | Where-Object { $_.Severity -eq "YELLOW" }).Count
-    $green  = ($AllFindings | Where-Object { $_.Severity -eq "GREEN"  }).Count
-    $info   = ($AllFindings | Where-Object { $_.Severity -eq "INFO"   }).Count
+    # @() matters: on PS 5.1 a single PSCustomObject has no .Count, so one RED
+    # finding used to render as zero and the bar claimed "All Clear".
+    $red    = @($AllFindings | Where-Object { $_.Severity -eq "RED"    }).Count
+    $yellow = @($AllFindings | Where-Object { $_.Severity -eq "YELLOW" }).Count
+    $green  = @($AllFindings | Where-Object { $_.Severity -eq "GREEN"  }).Count
+    $info   = @($AllFindings | Where-Object { $_.Severity -eq "INFO"   }).Count
     return @"
 <div class="summary-bar">
   $(if ($red    -gt 0) { "<span class='pill pill-red'>$red Critical</span>" })

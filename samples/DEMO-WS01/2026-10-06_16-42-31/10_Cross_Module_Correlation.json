@@ -1,0 +1,34 @@
+﻿{
+    "version":  "2.0",
+    "scanTime":  "2026-10-06 16:42:31",
+    "module":  "10",
+    "title":  "Cross-Module Correlation",
+    "admin":  true,
+    "findings":  [
+                     {
+                         "detail":  "Install date and run key creation are within 7 days. Sources: Module 06 (run key), Module 05 (software).",
+                         "whyItMatters":  "Persistence entry creation aligns with a known software installation -- expected behaviour.",
+                         "whyMightBeNormal":  "",
+                         "createdDate":  "",
+                         "severity":  "GREEN",
+                         "title":  "Explained: Run key \u0027OneDrive\u0027 corresponds to \u0027Microsoft OneDrive\u0027 installed on 2026-09-12",
+                         "sid":  ""
+                     },
+                     {
+                         "detail":  "AnyDesk installed 2026-09-28 (Module 05); Event 1102 log cleared 2026-09-28 22:41 (Module 09); listener on 7070 (Module 07).",
+                         "whyItMatters":  "A remote-access tool arriving the same day the audit trail is wiped fits a hands-on-keyboard intrusion.",
+                         "whyMightBeNormal":  "Coincidence is possible if IT installed AnyDesk and later cleared logs while troubleshooting.",
+                         "createdDate":  "",
+                         "severity":  "RED",
+                         "title":  "Correlated Concern: AnyDesk installed one day before the Security log was cleared",
+                         "sid":  ""
+                     }
+                 ],
+    "summary":  {
+                    "info":  0,
+                    "red":  1,
+                    "green":  1,
+                    "yellow":  0
+                },
+    "hostname":  "DEMO-WS01"
+}

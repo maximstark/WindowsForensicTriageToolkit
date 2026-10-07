@@ -66,10 +66,27 @@ foreach ($regPath in $runKeyPaths) {
         # Task 6: Get the registry key's last write time for createdDate field
         $keyItem      = Get-Item -Path $regPath -ErrorAction SilentlyContinue
         $keyLastWrite = if ($keyItem -and $keyItem.LastWriteTime) { $keyItem.LastWriteTime.ToString("yyyy-MM-dd") } else { "" }
+        # Task 2: Track whether we are processing the Winlogon key
+        $isWinlogonKey = $regPath -eq "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
         $props.PSObject.Properties |
             Where-Object { $_.Name -notmatch "^PS" } |
             ForEach-Object {
                 $val       = $_.Value.ToString()
+
+                # Task 2: Winlogon-specific filtering.
+                # Skip values that are not file paths (integers, GUIDs, flags, etc.)
+                # and skip values that refer ONLY to standard Windows executables.
+                # v2.0: every comma-separated entry must be a safe exe that is either
+                # a bare name or lives in %SystemRoot% / System32. A substring match
+                # would hide the classic "userinit.exe,C:\evil\x.exe" hijack and
+                # masquerades like C:\Users\Public\explorer.exe.
+                if ($isWinlogonKey) {
+                    $hasBackslash = $val -match '\\'
+                    $hasExeExt    = $val -match '\.(exe|dll|bat|cmd|ps1|vbs|com|scr)(\s|"|$|,)'
+                    if (-not $hasBackslash -and -not $hasExeExt) { return }
+                    if (Test-IsSafeWinlogonValue -Value $val) { return }
+                }
+
                 # Extract executable path from value (may have arguments)
                 $exePath   = ($val -split '"')[1]
                 if (-not $exePath) { $exePath = ($val -split ' ')[0] }
@@ -312,8 +329,18 @@ try {
             -Headers @("Type","Name","Query/Command","Namespace") `
             -Properties @("Type","Name","Query","Namespace")
 
-        $allFindings += New-Finding -Severity $SEV_RED `
-            -Title "WMI Event Subscriptions Found ($($filters.Count) filter(s), $($consumers.Count) consumer(s))" `
+        # v2.0: Windows ships one subscription pair by default ("SCM Event Log
+        # Filter" -> "SCM Event Log Consumer"). It is only benign if the consumer
+        # really is an NTEventLogEventConsumer, which can write event-log entries
+        # and nothing else -- a lookalike name on a CommandLine/ActiveScript
+        # consumer is still flagged.
+        $benignFilters   = @("SCM Event Log Filter")
+        $benignConsumers = @("SCM Event Log Consumer")
+        $allBenign = (@($filters | Where-Object { $benignFilters -notcontains $_.Name }).Count -eq 0) -and
+                     (@($consumers | Where-Object { $benignConsumers -notcontains $_.Name -or $_.CimClass.CimClassName -ne "NTEventLogEventConsumer" }).Count -eq 0)
+        $wmiSev = if ($allBenign) { $SEV_INFO } else { $SEV_RED }
+        $allFindings += New-Finding -Severity $wmiSev `
+            -Title "$(if ($allBenign) { 'Only the default Windows WMI subscription is present' } else { "WMI Event Subscriptions Found ($($filters.Count) filter(s), $($consumers.Count) consumer(s))" })" `
             -Detail "Filters: $(($filters | Select-Object -ExpandProperty Name) -join ', ') | Consumers: $(($consumers | Select-Object -ExpandProperty Name) -join ', ')" `
             -WhyItMatters "WMI subscriptions execute code in response to system events and survive reboots. This technique is used by APT groups and sophisticated malware because it is invisible to most AV scans." `
             -WhyMightBeNormal "Extremely rare on home machines. Enterprise management software (SCCM, etc.) uses WMI subscriptions legitimately."

@@ -1,0 +1,25 @@
+﻿{
+    "version":  "2.0",
+    "scanTime":  "2026-09-30 09:14:05",
+    "module":  "10",
+    "title":  "Cross-Module Correlation",
+    "admin":  true,
+    "findings":  [
+                     {
+                         "detail":  "Install date and run key creation are within 7 days. Sources: Module 06 (run key), Module 05 (software).",
+                         "whyItMatters":  "Persistence entry creation aligns with a known software installation -- expected behaviour.",
+                         "whyMightBeNormal":  "",
+                         "createdDate":  "",
+                         "severity":  "GREEN",
+                         "title":  "Explained: Run key \u0027OneDrive\u0027 corresponds to \u0027Microsoft OneDrive\u0027 installed on 2026-09-12",
+                         "sid":  ""
+                     }
+                 ],
+    "summary":  {
+                    "info":  0,
+                    "red":  0,
+                    "green":  1,
+                    "yellow":  0
+                },
+    "hostname":  "DEMO-WS01"
+}

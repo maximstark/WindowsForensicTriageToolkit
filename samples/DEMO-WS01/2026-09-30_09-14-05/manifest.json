@@ -1,0 +1,123 @@
+{
+  "generated": "2026-10-07T14:42:29.4649131-04:00",
+  "toolVersion": "2.0",
+  "hostname": "DEMO-WS01",
+  "note": "SHA-256 of every report file at the moment the scan finished. Re-hash to verify a copied folder.",
+  "files": [
+    {
+      "file": "00_Summary.html",
+      "bytes": 13324,
+      "sha256": "63CE165C9F91D4BE0DD1C5C6DCCAD20D76696A8D779BAAAAAEA512203D303708"
+    },
+    {
+      "file": "01_SystemIdentity.html",
+      "bytes": 6894,
+      "sha256": "08640968B78E3C57841D562A9C1B968F5F75D483403FCD414B9889744C1D727F"
+    },
+    {
+      "file": "01_System_Identity.json",
+      "bytes": 1455,
+      "sha256": "A0B65681EC3BED7139A3C7610C9879F2A7DDCC4EA0FA5FD1F8DB4AFB47008023"
+    },
+    {
+      "file": "02_StorageAndFiles.html",
+      "bytes": 7419,
+      "sha256": "D45E8B2C857CB87A8850DB0C1ACFFA30A9EE03119A8A0A645398F76D1BD4BF9C"
+    },
+    {
+      "file": "02_Storage___Files.json",
+      "bytes": 2084,
+      "sha256": "A555E14FC76C54F86004CC5481372A67398406B86797DC200E3B702094B0C1D8"
+    },
+    {
+      "file": "03_SecurityConfig.html",
+      "bytes": 7202,
+      "sha256": "24A987320C1CE7D8C62849E4DAF55DB597E929F16E6400CF475B1182B39A48FF"
+    },
+    {
+      "file": "03_Security_Configuration.json",
+      "bytes": 1902,
+      "sha256": "34582AB86B069E1731EDCC9E53DEC713EB2BC28335FF81CA75E506D9AEA0C1F0"
+    },
+    {
+      "file": "04_AccountsAndAuth.html",
+      "bytes": 7342,
+      "sha256": "BA33C148BF1E20BDCC9E9244C004782C32B013C726345ACA25DEBA5DA79FF0A3"
+    },
+    {
+      "file": "04_Accounts___Authentication.json",
+      "bytes": 2008,
+      "sha256": "5D5599652BAD2CEBC62482B0EF1F074D43AF9F57A4F85EA554ADB8952F8E2F1A"
+    },
+    {
+      "file": "05_ProcessesAndSoftware.html",
+      "bytes": 7609,
+      "sha256": "1F0C0F38024D03390CA11DFA50A76521FF3615BED2957EAF6806635F747B599D"
+    },
+    {
+      "file": "05_Processes___Software.json",
+      "bytes": 2222,
+      "sha256": "AB66287C9066E6EF582AA16103852542B2255FDA0A5F1D13D8879276A901196C"
+    },
+    {
+      "file": "06_Persistence.html",
+      "bytes": 7073,
+      "sha256": "ED06398C8C4D2643C0106E815812D6BA5812AD1C5B540C61609F38F9AE6BB226"
+    },
+    {
+      "file": "06_Persistence_Mechanisms.json",
+      "bytes": 1625,
+      "sha256": "626DE43C13E6EC23009BD058B546ABF735B4D5DD20593401C2EBD4D2288DC66F"
+    },
+    {
+      "file": "07_NetworkSnapshot.html",
+      "bytes": 6971,
+      "sha256": "8FFEF743B47B7EEDE881E8B963C479BC12D3F2B8A847AAE51711D7159A67CC05"
+    },
+    {
+      "file": "07_Network_Snapshot.json",
+      "bytes": 1520,
+      "sha256": "06F43AD4B8A37056E0C19A43923F93C1C60F8BE2A080055B28E9B33D7DEA4442"
+    },
+    {
+      "file": "08_NetworkTimeSeries.html",
+      "bytes": 6990,
+      "sha256": "2A09268D3AE0BAA8617A49B1928A8D01022AEE1EF87AE095CE07715EB125950F"
+    },
+    {
+      "file": "08_Network_Time_Series.json",
+      "bytes": 1535,
+      "sha256": "AD1CA3F67532BF92ACD800A6C22DED281BCE9B0489CEBC29F59C8064A9153F90"
+    },
+    {
+      "file": "09_ForensicArtifacts.html",
+      "bytes": 6923,
+      "sha256": "610D64D7CB40060570CE2267DAA5F30D7E68E41FDBA0D5E7545FD63841C93A2A"
+    },
+    {
+      "file": "09_Forensic_Artifacts.json",
+      "bytes": 1470,
+      "sha256": "29FA72C5D6BF4ACFA573114625231C71937E617AC2B1D21841AB67ECD4C5ABD4"
+    },
+    {
+      "file": "10_Correlation.html",
+      "bytes": 6631,
+      "sha256": "EA4C3A94DF287A1E3204E8CAB56D59A989744D41A464F33767261F4764407492"
+    },
+    {
+      "file": "10_Correlation_Export.txt",
+      "bytes": 653,
+      "sha256": "9DC8BDE9248C0EC0DBAB71ED57DC5D1A4EE83EC1A1BF8D294A4393C03C7F87C5"
+    },
+    {
+      "file": "10_Cross_Module_Correlation.json",
+      "bytes": 1065,
+      "sha256": "10CAC2855637DB033CDA13C8813EF2AF798BAE5D92667BAD70123B4F95C1F16F"
+    },
+    {
+      "file": "scan.json",
+      "bytes": 3162,
+      "sha256": "43A2E68999E794B437DAAD9B05F5A4BD256CC0C24973AD33C0CFC389557716DF"
+    }
+  ]
+}

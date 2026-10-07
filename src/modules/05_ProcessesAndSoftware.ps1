@@ -58,6 +58,8 @@ $SUSPICIOUS_PARENT_CHILD = @{
     "notepad"     = @("powershell","cmd","net","netsh","reg")
 }
 
+$BROWSER_PARENTS = @("chrome", "firefox", "msedge", "iexplore")
+
 # Paths where processes should NOT normally run from
 $SUSPICIOUS_PROC_PATHS = @(
     $env:TEMP,
@@ -86,6 +88,7 @@ $connectedPIDs = if ($activeConnections) {
 $processes = Get-Process -ErrorAction SilentlyContinue
 $procRows  = @()
 $flaggedProcs = 0
+$flaggedProcList = @()
 
 foreach ($proc in $processes) {
     try {
@@ -95,6 +98,7 @@ foreach ($proc in $processes) {
         $hasNet    = $connectedPIDs -contains $proc.Id
         $isSusp    = $false
         $flagReason= ""
+        $flagSev   = $SEV_RED
 
         # Check for RAT name match
         foreach ($rat in $KNOWN_RAT_NAMES) {
@@ -106,7 +110,7 @@ foreach ($proc in $processes) {
         }
 
         # Check for process running from suspicious location
-        if ($path) {
+        if ($path -and -not $isSusp) {
             foreach ($suspPath in $SUSPICIOUS_PROC_PATHS) {
                 if ($path -like "$suspPath*") {
                     $isSusp     = $true
@@ -116,20 +120,22 @@ foreach ($proc in $processes) {
             }
         }
 
-        # Unsigned executable running with network connection
-        if ($publisher -eq "UNSIGNED" -and $hasNet) {
+        # Unsigned executable running with network connection.
+        # v2.0: YELLOW, not RED -- unsigned developer runtimes (Python, Node builds,
+        # game tools) talk to the network all day -- and skipped entirely for the
+        # known-unsigned toolchain paths in $WHITELISTED_APPDATA_PATHS.
+        if (-not $isSusp -and $publisher -eq "UNSIGNED" -and $hasNet -and -not (Test-IsWhitelistedPath -FilePath $path)) {
             $isSusp     = $true
             $flagReason = "Unsigned process with active network connection"
+            $flagSev    = $SEV_YELLOW
         }
 
         if ($isSusp) {
             $flaggedProcs++
-            $allFindings += New-Finding `
-                -Severity $SEV_RED `
-                -Title "Suspicious Process: $($proc.Name) (PID $($proc.Id))" `
-                -Detail "Path: $path | Publisher: $publisher | Reason: $flagReason | Network: $hasNet" `
-                -WhyItMatters "This process matches one or more indicators associated with malicious software." `
-                -WhyMightBeNormal "Verify the process against its expected install location and publisher."
+            $flaggedProcList += [PSCustomObject]@{
+                Name = $proc.Name; Id = $proc.Id; Path = $path; Publisher = $publisher
+                Reason = $flagReason; Severity = $flagSev; HasNet = $hasNet
+            }
         }
 
         $procRows += [PSCustomObject]@{
@@ -154,6 +160,20 @@ foreach ($proc in $processes) {
             "Flag"       = ""
         }
     }
+}
+
+# v2.0: one finding per executable + reason, listing every PID, instead of one
+# finding per process instance (eleven copies of the same python.exe = one finding)
+foreach ($grp in ($flaggedProcList | Group-Object { "$($_.Path)|$($_.Reason)" })) {
+    $p    = $grp.Group[0]
+    $pids = ($grp.Group | ForEach-Object { $_.Id }) -join ', '
+    $inst = if ($grp.Count -gt 1) { "$($grp.Count) instances" } else { "PID $($p.Id)" }
+    $allFindings += New-Finding `
+        -Severity $p.Severity `
+        -Title "Suspicious Process: $($p.Name) ($inst)" `
+        -Detail "Path: $($p.Path) | Publisher: $($p.Publisher) | Reason: $($p.Reason) | PIDs: $pids" `
+        -WhyItMatters "This process matches one or more indicators associated with malicious software." `
+        -WhyMightBeNormal "Verify the process against its expected install location and publisher. Unsigned developer runtimes and portable tools commonly trip the unsigned-with-network check."
 }
 
 # Sort: flagged first, then by name
@@ -202,14 +222,32 @@ try {
                     "Child"     = "$($proc.Name) (PID $($proc.ProcessId))"
                     "Child Path"= $proc.ExecutablePath
                     "Severity"  = "HIGH"
+                    "Pair"      = "$($parentProc.Name) -> $($proc.Name)"
+                    "IsBrowser" = $BROWSER_PARENTS -contains $parentName
+                    "ChildPid"  = $proc.ProcessId
                 }
-                $allFindings += New-Finding -Severity $SEV_RED `
-                    -Title "Suspicious Parent-Child: $($parentProc.Name) -> $($proc.Name)" `
-                    -Detail "Parent PID: $parentId | Child PID: $($proc.ProcessId) | Child path: $($proc.ExecutablePath)" `
-                    -WhyItMatters "Office applications, PDF readers, and browsers spawning shells or script interpreters is a classic malware indicator. This is how macro-based malware executes." `
-                    -WhyMightBeNormal "Some legitimate automation tools use this pattern. Verify the child process path and what it is doing."
             }
         }
+    }
+
+    # v2.0: one finding per parent/child pair. Browsers launching cmd.exe is how
+    # extension native-messaging hosts start (password managers, AI assistants,
+    # download helpers), so a browser parent is a warning; Office, PDF readers
+    # and Notepad spawning shells stays critical.
+    foreach ($grp in ($parentChildFindings | Group-Object Pair)) {
+        $g     = $grp.Group[0]
+        $sev   = if ($g.IsBrowser) { $SEV_YELLOW } else { $SEV_RED }
+        $count = if ($grp.Count -gt 1) { " ($($grp.Count) instances)" } else { "" }
+        $normal = if ($g.IsBrowser) {
+            "Browser extensions with a native-messaging host (password managers, AI assistants, download helpers) start through cmd.exe. Check which extensions are installed."
+        } else {
+            "Some legitimate automation tools use this pattern. Verify the child process path and what it is doing."
+        }
+        $allFindings += New-Finding -Severity $sev `
+            -Title "Suspicious Parent-Child: $($grp.Name)$count" `
+            -Detail "Parent: $($g.Parent) | Child PIDs: $(($grp.Group | ForEach-Object { $_.ChildPid }) -join ', ') | Child path: $($g.'Child Path')" `
+            -WhyItMatters "Office applications, PDF readers, and browsers spawning shells or script interpreters is a classic malware indicator. This is how macro-based malware executes." `
+            -WhyMightBeNormal $normal
     }
 
     if ($parentChildFindings.Count -gt 0) {
@@ -243,6 +281,8 @@ $regPaths = @(
 
 $installedProgs = @()
 $cutoff30       = (Get-Date).AddDays(-30)
+# Task 6: Hashtable to track seen software names and prevent duplicate findings
+$seenSoftwareNames = @{}
 
 foreach ($regPath in $regPaths) {
     try {
@@ -262,6 +302,10 @@ foreach ($regPath in $regPaths) {
             foreach ($rat in $KNOWN_RAT_NAMES) {
                 if ($item.DisplayName -like "*$rat*") { $isRAT = $true; break }
             }
+
+            # Task 6: Skip duplicate rows and findings for software seen from multiple registry paths
+            if ($seenSoftwareNames.ContainsKey($item.DisplayName)) { continue }
+            $seenSoftwareNames[$item.DisplayName] = $true
 
             $installedProgs += [PSCustomObject]@{
                 "Name"        = $item.DisplayName

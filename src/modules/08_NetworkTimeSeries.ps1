@@ -35,6 +35,12 @@ $HOSTNAME     = $env:COMPUTERNAME
 $POLL_INTERVAL_SECONDS = 30
 $POLL_COUNT            = 10   # 10 polls x 30s = 5 minutes total
 
+# v2.0: the launcher can shorten or lengthen the watch (TRIAGE_NET_MINUTES, 1-30)
+$netMinutes = 0
+if ([int]::TryParse("$env:TRIAGE_NET_MINUTES", [ref]$netMinutes) -and $netMinutes -ge 1 -and $netMinutes -le 30) {
+    $POLL_COUNT = [int]($netMinutes * 60 / $POLL_INTERVAL_SECONDS)
+}
+
 Write-Host ""
 Write-Host "============================================"
 Write-Host " Module 08 -- Network Time Series"
@@ -274,9 +280,9 @@ foreach ($ip in $uniqueIPs) {
         if ($isPrivateIP) {
             $allFindings += New-Finding -Severity $SEV_INFO `
                 -Title "Connection to Suspicious Port on $ip" `
-                -Detail "Ports: $($portsForIP -join ', ') | Processes: $($processesForIP -join ', ') | Reverse DNS: $reverseDNS | Private network address — local network traffic" `
+                -Detail "Ports: $($portsForIP -join ', ') | Processes: $($processesForIP -join ', ') | Reverse DNS: $reverseDNS | Private network address -- local network traffic" `
                 -WhyItMatters "These ports are commonly associated with reverse shells, C2 frameworks, and remote access tools." `
-                -WhyMightBeNormal "Destination is a private/local network address — traffic is confined to the local network."
+                -WhyMightBeNormal "Destination is a private/local network address -- traffic is confined to the local network."
         } else {
             $allFindings += New-Finding -Severity $SEV_RED `
                 -Title "Connection to Suspicious Port on $ip" `
@@ -293,7 +299,7 @@ foreach ($ip in $uniqueIPs) {
         # Task 8: Apply RFC 1918 and vendor map downgrade logic
         if ($isPrivateIP) {
             $connSeverity = $SEV_INFO
-            $detail += " | Private network address — local network traffic"
+            $detail += " | Private network address -- local network traffic"
         } elseif ($vendorName) {
             $connSeverity = $SEV_INFO
             $detail += " | Process is recognized $vendorName software"

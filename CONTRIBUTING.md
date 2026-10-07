@@ -20,10 +20,12 @@ If you know of a forensic indicator the toolkit should check for, open an issue 
 2. Create a feature branch: `git checkout -b fix/module02-false-positive`
 3. Make your changes in the `src/` directory
 4. Test by running the affected module(s) on at least one Windows 10 or 11 machine
-5. Run the build script to verify compilation: `.\build.ps1`
+5. Run the build and the tests: `.\build.ps1`, then `.\tests\Run-Tests.ps1` (use an elevated prompt for the app tests)
 6. Submit a pull request with a clear description of what changed and why
 
 ### Code Style
+- PowerShell scripts must be pure ASCII (PowerShell 5.1 misreads BOM-less UTF-8). The build enforces this
+- The app is C# 5, so it compiles with the `csc.exe` built into Windows: no string interpolation, `?.`, or expression-bodied members
 - PowerShell modules use `PascalCase` for functions, `$camelCase` for local variables, `$UPPER_CASE` for constants
 - Every finding must include `WhyItMatters` and `WhyMightBeNormal` explanations
 - Severity levels must be justified — RED is for things that are almost always malicious, YELLOW for things that warrant investigation, INFO for context
