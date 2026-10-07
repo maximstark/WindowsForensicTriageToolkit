@@ -243,6 +243,8 @@ $regPaths = @(
 
 $installedProgs = @()
 $cutoff30       = (Get-Date).AddDays(-30)
+# Task 6: Hashtable to track seen software names and prevent duplicate findings
+$seenSoftwareNames = @{}
 
 foreach ($regPath in $regPaths) {
     try {
@@ -262,6 +264,10 @@ foreach ($regPath in $regPaths) {
             foreach ($rat in $KNOWN_RAT_NAMES) {
                 if ($item.DisplayName -like "*$rat*") { $isRAT = $true; break }
             }
+
+            # Task 6: Skip duplicate rows and findings for software seen from multiple registry paths
+            if ($seenSoftwareNames.ContainsKey($item.DisplayName)) { continue }
+            $seenSoftwareNames[$item.DisplayName] = $true
 
             $installedProgs += [PSCustomObject]@{
                 "Name"        = $item.DisplayName

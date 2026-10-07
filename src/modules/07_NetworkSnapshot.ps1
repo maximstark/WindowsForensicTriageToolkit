@@ -330,7 +330,8 @@ if ($dnsCache -and $dnsCache.Count -gt 0) {
     $suspiciousDomains = $dnsCache | Where-Object {
         $entry = $_.Entry
         # Long random-looking subdomains (DGA indicator)
-        ($entry -match "^[a-z0-9]{12,}\." -and $entry -notmatch "microsoft|windows|apple|google|amazon|cdn|akamai|cloudfront") -or
+        # Task 4: Added Proton domains to known-provider exclusion list
+        ($entry -match "^[a-z0-9]{12,}\." -and $entry -notmatch "microsoft|windows|apple|google|amazon|cdn|akamai|cloudfront|proton|protonmail|protonvpn|protonstatus|protondrive") -or
         # Direct IP connections (no domain -- suspicious for outbound)
         ($entry -match "^\d+\.\d+\.\d+\.\d+$")
     }

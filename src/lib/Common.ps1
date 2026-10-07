@@ -62,7 +62,16 @@ $WHITELISTED_APPDATA_PATHS = @(
     "*\Microsoft\WindowsApps\*",
     "*\chocolatey\*",
     "*\AppData\Roaming\npm\*",
-    "*\AppData\Roaming\uv\*"
+    "*\AppData\Roaming\uv\*",
+    # Task 3: Toolkit self-exclusion and additional noise-reduction paths
+    "*\Temp\TriageToolkit-*\*",
+    "*\Windows\AppRepository\Packages\MicrosoftWindows.Client.*",
+    "*\Temp\is-*.tmp\*",
+    "*\Temp\nsc*.tmp\*",
+    "*\Temp\nsp*.tmp\*",
+    "*\Temp\nse*.tmp\*",
+    "*\AppData\Local\Temp\lu*\*",
+    "*\Amazon\Kindle\*"
 )
 
 $SUSPICIOUS_PATHS = @(
@@ -130,7 +139,7 @@ function Initialize-ReportDir {
         $logsRoot   = Join-Path $scriptRoot "Logs"
         $hostname   = $env:COMPUTERNAME
         $date       = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
-        $scanFolder = Join-Path $logsRoot $hostname $date
+        $scanFolder = Join-Path (Join-Path $logsRoot $hostname) $date
     }
 
     # Reuse existing report dir within same session

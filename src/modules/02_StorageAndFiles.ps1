@@ -343,6 +343,11 @@ if (Test-Path $histPath -ErrorAction SilentlyContinue) {
                     if ($sp.Pattern -match "Bypass\|ExecutionPolicy" -and $line -match "Set-ExecutionPolicy" -and $line -match "-Scope\s+Process") {
                         continue
                     }
+                    # Task 7: Filter "powershell -ExecutionPolicy Bypass -File <script>" pattern --
+                    # this is the standard way to run a PS script file and should never be flagged
+                    if ($sp.Pattern -match "Bypass\|ExecutionPolicy" -and $line -match "-ExecutionPolicy\s+Bypass" -and $line -match "-File") {
+                        continue
+                    }
                     $allFindings += New-Finding `
                         -Severity $SEV_RED `
                         -Title "Suspicious PowerShell Command In History" `

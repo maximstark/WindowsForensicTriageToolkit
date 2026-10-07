@@ -200,7 +200,6 @@ namespace TriageToolkit
         private RichTextBox logBox;
         private Button startButton;
         private Button cancelButton;
-        private Panel historyPanel;
         private ListView historyList;
 
         // Report screen controls

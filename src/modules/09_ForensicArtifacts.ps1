@@ -426,6 +426,10 @@ foreach ($tempPath in $tempPaths) {
     }
 }
 
+# Task 6: Deduplicate archives -- $env:TEMP and $env:LOCALAPPDATA\Temp can resolve
+# to the same directory, causing every file to be listed twice.
+$archives = $archives | Sort-Object { ($_.Path + "\" + $_.File).ToLower() } -Unique
+
 $archiveHtml = if ($archives.Count -gt 0) {
     ConvertTo-HtmlTable `
         -Data $archives `

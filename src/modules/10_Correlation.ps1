@@ -18,6 +18,10 @@
 
 #Requires -Version 5.1
 
+param(
+    [string]$ScanOutputDir = ""
+)
+
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
@@ -35,7 +39,40 @@ Write-Host " Module 10 -- Cross-Module Correlation"
 Write-Host "============================================"
 Write-Host ""
 
-$reportDir  = Initialize-ReportDir -ModuleName $MODULE_TITLE
+# Resolve the scan output directory
+if (-not [string]::IsNullOrWhiteSpace($ScanOutputDir) -and (Test-Path $ScanOutputDir)) {
+    $reportDir = $ScanOutputDir
+    $Global:_TriageReportDir = $reportDir
+    Write-Host "(*) Using specified scan directory: $reportDir"
+} elseif ($env:TRIAGE_REPORT_DIR -and (Test-Path $env:TRIAGE_REPORT_DIR)) {
+    $reportDir = $env:TRIAGE_REPORT_DIR
+    $Global:_TriageReportDir = $reportDir
+    Write-Host "(*) Using TRIAGE_REPORT_DIR: $reportDir"
+} else {
+    # Fallback: find the most recent timestamped subfolder under Logs\
+    $exeParent  = Split-Path $ScriptDir -Parent
+    $logsRoot   = Join-Path $exeParent "Logs"
+    $latestScan = $null
+    if (Test-Path $logsRoot) {
+        $latestScan = Get-ChildItem -Path $logsRoot -Directory -Recurse -ErrorAction SilentlyContinue |
+                      Where-Object { $_.Name -match '^\d{4}-\d{2}-\d{2}' } |
+                      Sort-Object Name -Descending |
+                      Select-Object -First 1
+    }
+    if ($latestScan) {
+        $reportDir = $latestScan.FullName
+        $Global:_TriageReportDir = $reportDir
+        Write-Host "(*) Auto-detected most recent scan: $reportDir"
+    } else {
+        $reportDir = Initialize-ReportDir -ModuleName $MODULE_TITLE
+        Write-Host "(*) No prior scan found -- using new report directory: $reportDir"
+    }
+}
+
+if (-not (Test-Path $reportDir)) {
+    New-Item -ItemType Directory -Path $reportDir -Force | Out-Null
+}
+
 $reportFile = Join-Path $reportDir "10_Correlation.html"
 
 $allFindings       = @()   # findings this module generates (for JSON/summary bar)
@@ -46,7 +83,7 @@ $cleanCorrelations   = @()
 # =============================================================================
 # LOAD: Read all module JSON files
 # =============================================================================
-Write-Host "[*] Loading module JSON output files..."
+Write-Host "(*) Loading module JSON output files..."
 
 $moduleData = @{}
 $jsonFiles  = Get-ChildItem -Path $reportDir -Filter "*.json" -ErrorAction SilentlyContinue |
@@ -55,7 +92,7 @@ $jsonFiles  = Get-ChildItem -Path $reportDir -Filter "*.json" -ErrorAction Silen
 
 foreach ($jf in $jsonFiles) {
     try {
-        $raw    = Get-Content -Path $jf.FullName -Raw -ErrorAction SilentlyContinue
+        $raw    = Get-Content -Path $jf.FullName -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
         $parsed = $raw | ConvertFrom-Json
         $num    = $parsed.module
         if ($num) { $moduleData[$num] = $parsed }
@@ -63,6 +100,16 @@ foreach ($jf in $jsonFiles) {
     } catch {
         Write-Host "  [WARN] Could not parse $($jf.Name): $($_.Exception.Message)"
     }
+}
+
+if ($jsonFiles.Count -lt 9) {
+    Write-Host ""
+    Write-Host "  [WARN] Only $($jsonFiles.Count) of 9 expected JSON files found in: $reportDir"
+    Write-Host "         Run modules 01-09 first, or pass the correct path via -ScanOutputDir."
+    if ($jsonFiles.Count -eq 0) {
+        Write-Host "  [WARN] No JSON data available -- correlation report will be empty."
+    }
+    Write-Host ""
 }
 
 # Helper: safe access to module findings array
@@ -74,14 +121,33 @@ function Get-ModuleFindings {
     return @()
 }
 
-# Helper: fuzzy name match (one name contains the other, stripped of punctuation)
+# Helper: fuzzy name match with length-proportional threshold.
+# Task 5: Replaced simple substring match with stricter algorithm to prevent
+# false matches like Steam vs. Windows Team Extension SDK.
+# Rules:
+#   1. The strings must share at least 6 consecutive characters.
+#   2. The shorter string must be at least 40% of the longer string's length.
 function Test-FuzzyNameMatch {
     param([string]$A, [string]$B)
     if ([string]::IsNullOrWhiteSpace($A) -or [string]::IsNullOrWhiteSpace($B)) { return $false }
     $a2 = ($A.ToLower() -replace '[^a-z0-9]', '')
     $b2 = ($B.ToLower() -replace '[^a-z0-9]', '')
     if ($a2.Length -lt 3 -or $b2.Length -lt 3) { return $false }
-    return ($a2 -like "*$b2*" -or $b2 -like "*$a2*")
+
+    # Identify shorter and longer strings
+    $shorter = if ($a2.Length -le $b2.Length) { $a2 } else { $b2 }
+    $longer  = if ($a2.Length -le $b2.Length) { $b2 } else { $a2 }
+
+    # Condition 2: shorter must be at least 40% of longer (prevents Steam vs Windows Team SDK)
+    if ($shorter.Length -lt [Math]::Ceiling($longer.Length * 0.4)) { return $false }
+
+    # Condition 1: must share at least 6 consecutive characters
+    $minChars = 6
+    if ($shorter.Length -lt $minChars) { return $false }
+    for ($i = 0; $i -le ($shorter.Length - $minChars); $i++) {
+        if ($longer.Contains($shorter.Substring($i, $minChars))) { return $true }
+    }
+    return $false
 }
 
 # Helper: try to parse a date string, return $null on failure
@@ -106,7 +172,7 @@ $mod08findings = Get-ModuleFindings "08"
 $mod09findings = Get-ModuleFindings "09"
 
 Write-Host ""
-Write-Host "[*] Applying correlation patterns..."
+Write-Host "(*) Applying correlation patterns..."
 
 # =============================================================================
 # PATTERN 1: Scheduled task running under dormant account
@@ -156,7 +222,7 @@ foreach ($f06 in $mod06findings) {
             $explainedFindings += New-Finding -Severity $SEV_INFO `
                 -Title "Explained: Task '$taskName' runs under account '$principalId'" `
                 -Detail "Account has recorded logon activity. Last logon: $lastLogon. Sources: Module 06 (task), Module 04 (account)." `
-                -WhyItMatters "Task principal account shows normal interactive usage — no dormancy concern."
+                -WhyItMatters "Task principal account shows normal interactive usage -- no dormancy concern."
         }
     }
 }
@@ -198,7 +264,7 @@ foreach ($f06 in $mod06findings) {
                     $explainedFindings += New-Finding -Severity $SEV_INFO `
                         -Title "Explained: Run key '$entryName' corresponds to '$($sw.Name)' installed on $($sw.Date)" `
                         -Detail "Install date and run key creation are within 7 days. Sources: Module 06 (run key), Module 05 (software)." `
-                        -WhyItMatters "Persistence entry creation aligns with a known software installation — expected behaviour."
+                        -WhyItMatters "Persistence entry creation aligns with a known software installation -- expected behaviour."
                     $matched = $true
                     break
                 }
@@ -246,7 +312,7 @@ foreach ($f08 in $mod08findings) {
             $explainedFindings += New-Finding -Severity $SEV_INFO `
                 -Title "Explained: Connection by '$procName' is consistent with '$($swMatch.Name)' installed on $($swMatch.Date)" `
                 -Detail "Process is a recognized vendor application with a matching installation record. Sources: Module 08 (network), Module 05 (software)." `
-                -WhyItMatters "Outbound connection matches a known installed application — no further action required."
+                -WhyItMatters "Outbound connection matches a known installed application -- no further action required."
         } else {
             # Recognized vendor but no install record in Module 05
             $correlatedConcerns += New-Finding -Severity $SEV_YELLOW `
@@ -295,7 +361,7 @@ foreach ($sw in $softwareFindings) {
             $explainedFindings += New-Finding -Severity $SEV_INFO `
                 -Title "Explained: Run key '$entryName' was created within 7 days of '$($sw.Name)' installation" `
                 -Detail "Software installed: $($sw.Date) | Persistence entry: $($f06.createdDate). Sources: Module 05 (software), Module 06 (run key)." `
-                -WhyItMatters "Persistence entry creation is temporally consistent with a known software installation — expected install behaviour."
+                -WhyItMatters "Persistence entry creation is temporally consistent with a known software installation -- expected install behaviour."
         }
     }
 }
@@ -394,7 +460,7 @@ foreach ($f03 in $mod03findings) {
 if ($defenderActive -and $noDetections -and $lsassPPL -and $wdigestDisabled -and $uacEnabled) {
     $cleanCorrelations += New-Finding -Severity $SEV_GREEN `
         -Title "Clean Correlation: Strong security posture confirmed across all key controls" `
-        -Detail "Defender active with no detections, LSASS protected, WDigest disabled — credential theft risk is low. Source: Module 03 (security config)." `
+        -Detail "Defender active with no detections, LSASS protected, WDigest disabled -- credential theft risk is low. Source: Module 03 (security config)." `
         -WhyItMatters "All five critical security controls are confirmed active. This significantly reduces the risk of credential theft, undetected malware, and privilege escalation."
 } else {
     $missing = @()
@@ -410,7 +476,7 @@ if ($defenderActive -and $noDetections -and $lsassPPL -and $wdigestDisabled -and
 }
 
 Write-Host ""
-Write-Host "[*] Computing noise-adjusted score..."
+Write-Host "(*) Computing noise-adjusted score..."
 
 # =============================================================================
 # NOISE-ADJUSTED SCORE
@@ -464,7 +530,7 @@ $allFindings += $cleanCorrelations
 # =============================================================================
 # ASSEMBLE: HTML Report
 # =============================================================================
-Write-Host "[*] Writing correlation report..."
+Write-Host "(*) Writing correlation report..."
 
 $concernsHtml = if ($correlatedConcerns.Count -gt 0) {
     ConvertTo-HtmlFindings -Findings $correlatedConcerns
@@ -515,7 +581,7 @@ Write-ModuleJson -ReportDir $reportDir -ModuleNumber $MODULE_NUM -ModuleTitle $M
 # =============================================================================
 # AI-READY EXPORT: 10_Correlation_Export.txt
 # =============================================================================
-Write-Host "[*] Writing AI-ready export..."
+Write-Host "(*) Writing AI-ready export..."
 
 $exportFile  = Join-Path $reportDir "10_Correlation_Export.txt"
 $exportLines = [System.Collections.Generic.List[string]]::new()
